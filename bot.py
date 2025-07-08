@@ -6,46 +6,31 @@ from flask import Flask
 from threading import Thread
 
 # --- Cấu hình Web Server cho UptimeRobot ---
-# Tạo một ứng dụng web Flask đơn giản
 app = Flask('')
-
 @app.route('/')
 def home():
-    # Khi UptimeRobot truy cập vào URL của bot, nó sẽ nhận được dòng chữ này
     return "Bot is alive and running!"
-
 def run():
-    # Chạy web server trên port 8080
     app.run(host='0.0.0.0', port=8080)
-
 def keep_alive():
-    # Chạy web server trong một luồng (thread) riêng để không chặn bot
     t = Thread(target=run)
     t.start()
 
 # --- Cấu hình Bot Discord ---
-# Load biến môi trường từ file .env (khi chạy local)
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
-# Cấp quyền (Intents) cho bot để đọc được nội dung tin nhắn
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 intents.messages = True
 
-# Khởi tạo bot với prefix '?' và intents
 bot = commands.Bot(command_prefix='?', intents=intents)
-
-# Tạo một dictionary để lưu trữ các tin nhắn ghim
-# Dictionary này sẽ được chia sẻ với các cogs
 bot.sticky_messages = {}
 
-# Sự kiện khi bot sẵn sàng
 @bot.event
 async def on_ready():
     print(f'Đăng nhập thành công với tên {bot.user}')
-    # Load tất cả các file command trong thư mục cogs
     for filename in os.listdir('./cogs'):
         if filename.endswith('.py'):
             try:
@@ -54,37 +39,38 @@ async def on_ready():
             except Exception as e:
                 print(f'❌ Lỗi khi load cog {filename}: {e}')
 
-# Sự kiện khi có tin nhắn mới trong kênh
+# --- SỬA LẠI LOGIC on_message ĐỂ KHẮC PHỤC LỖI ---
 @bot.event
 async def on_message(message):
-    # Bỏ qua tin nhắn của chính bot để tránh vòng lặp vô tận
+    # Bỏ qua tin nhắn của chính bot
     if message.author == bot.user:
         return
 
-    # Kiểm tra xem kênh này có tin nhắn ghim đang hoạt động không
-    if message.channel.id in bot.sticky_messages:
+    # Xử lý logic tin nhắn ghim
+    # Chỉ gửi lại tin nhắn ghim nếu kênh có thiết lập và tin nhắn đến không phải là một lệnh
+    is_sticky_channel = message.channel.id in bot.sticky_messages
+    is_command = message.content.startswith(bot.command_prefix)
+
+    if is_sticky_channel and not is_command:
+        # Đây là tin nhắn thường trong kênh ghim -> gửi lại tin nhắn ghim
         sticky_info = bot.sticky_messages[message.channel.id]
         
-        # Xóa tin nhắn ghim cũ
+        # Xóa tin ghim cũ
         try:
             await sticky_info['last_message'].delete()
         except discord.NotFound:
-            # Tin nhắn có thể đã bị xóa thủ công, bỏ qua lỗi
-            print(f"Tin nhắn ghim cũ ở kênh #{message.channel.name} không tìm thấy, có thể đã bị xóa.")
+            print(f"Tin nhắn ghim cũ ở kênh #{message.channel.name} không tìm thấy.")
         except discord.Forbidden:
             print(f"Không có quyền xóa tin nhắn ở kênh #{message.channel.name}.")
 
-        # Gửi lại tin nhắn ghim mới và cập nhật lại thông tin
+        # Gửi lại tin ghim mới và cập nhật
         new_sticky_message = await message.channel.send(sticky_info['content'])
         bot.sticky_messages[message.channel.id]['last_message'] = new_sticky_message
-        print(f"Đã gửi lại tin nhắn ghim tại kênh #{message.channel.name}")
-
-    # Xử lý các lệnh command (quan trọng, nếu không có dòng này bot sẽ không nhận lệnh)
+    
+    # Luôn xử lý các lệnh, để các lệnh như ?stoppin có thể hoạt động
     await bot.process_commands(message)
 
 # --- Chạy Bot và Web Server ---
 if __name__ == "__main__":
-    # Bật web server
     keep_alive()
-    # Chạy bot
     bot.run(TOKEN)
