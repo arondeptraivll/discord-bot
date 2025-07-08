@@ -16,8 +16,8 @@ intents.guilds = True
 intents.members = True
 
 # === THAY ĐỔI TẠI ĐÂY ===
-# Khởi tạo bot với prefix '@' và các intents đã thiết lập
-bot = commands.Bot(command_prefix='@', intents=intents)
+# Khởi tạo bot với prefix '!' và các intents đã thiết lập
+bot = commands.Bot(command_prefix='!', intents=intents) # <--- ĐÃ SỬA
 # ========================
 
 # Xóa lệnh help mặc định
