@@ -46,7 +46,6 @@ class HelpCog(commands.Cog):
             "```\n"
             "➡️ **Chức năng:** Xóa tin nhắn do bot gửi (nếu lỡ nhập sai hoặc muốn dọn dẹp).\n"
             "_ _\n"
-            "*Anh em có thể test ngay tại đây luôn nhé.*\n"
             "*Làm sao để lấy ID tin nhắn? Vào `Cài đặt > Nâng cao > Bật Chế độ nhà phát triển`. Sau đó chuột phải vào tin nhắn bất kỳ và chọn `Copy Message ID`.*"
         )
         # ========================
