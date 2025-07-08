@@ -2,7 +2,6 @@ import discord
 from discord.ext import commands
 from discord.ui import View, Button
 
-# Lớp View chứa Button
 class HelpView(View):
     def __init__(self, author: discord.User, **kwargs):
         super().__init__(timeout=300, **kwargs)
@@ -19,41 +18,35 @@ class HelpView(View):
     async def delete_button(self, interaction: discord.Interaction, button: Button):
         await interaction.message.delete()
 
-
-# Cog chứa lệnh Help
 class HelpCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
-    # Lưu ý: Lệnh help gốc đã bị đổi tên để tránh xung đột với lệnh `help` của bot.
-    # Bây giờ lệnh help của bạn được định nghĩa tại đây với tên 'help'.
     @commands.command(name='help')
     async def help_command(self, ctx: commands.Context):
         await ctx.message.delete()
         
-        # === THAY ĐỔI TẠI ĐÂY ===
+        # ====> THAY ĐỔI CÁC DÒNG DƯỚI ĐÂY <====
         help_text = (
             "**CÁC LỆNH HIỆN TẠI (MUỐN CÓ THÊM LỆNH GÌ NHẮN ADMIN)**\n"
             "_ _\n"
             "```\n"
-            "@embed [tiêu đề]\n"
+            "!embed [tiêu đề]\n"  # <-- Đã đổi
             "[nội dung]\n"
             "```\n"
             "➡️ **Chức năng:** Tạo ra một embed đẹp với tiêu đề và nội dung.\n"
             "_ _\n"
             "```\n"
-            "@deletebotmsg [message id]\n"
+            "!deletebotmsg [message id]\n"  # <-- Đã đổi
             "```\n"
             "➡️ **Chức năng:** Xóa tin nhắn do bot gửi (nếu lỡ nhập sai hoặc muốn dọn dẹp).\n"
             "_ _\n"
+            
             "*Làm sao để lấy ID tin nhắn? Vào `Cài đặt > Nâng cao > Bật Chế độ nhà phát triển`. Sau đó chuột phải vào tin nhắn bất kỳ và chọn `Copy Message ID`.*"
         )
-        # ========================
         
         view = HelpView(author=ctx.author)
         await ctx.send(help_text, view=view)
 
-
-# Hàm setup để bot có thể load Cog này
 async def setup(bot):
     await bot.add_cog(HelpCog(bot))
