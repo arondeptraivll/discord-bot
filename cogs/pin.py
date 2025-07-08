@@ -26,12 +26,11 @@ class PinCog(commands.Cog):
 
         if ctx.channel.id in self.sticky_messages:
             await ctx.send(
-                f"{ctx.author.mention}, kênh này đã có tin nhắn ghim. Dùng `?stoppin` để gỡ.",
-                delete_after=15  # Tự xóa sau 15 giây
+                f"Kênh này đã có tin nhắn ghim. Dùng `?stoppin` để gỡ.",
+                delete_after=15
             )
             return
 
-        # Định dạng nội dung tin nhắn ghim với 3 dòng trống ở giữa
         formatted_content = f"## 📌 Tin Nhắn Được Ghim\n\n\n\n{message_content}"
         
         new_sticky_message = await ctx.send(formatted_content)
@@ -52,7 +51,7 @@ class PinCog(commands.Cog):
             pass
 
         if ctx.channel.id in self.sticky_messages:
-            sticky_info = self.sticky_messages.pop(ctx.channel.id) # Lấy và xóa khỏi dict
+            sticky_info = self.sticky_messages.pop(ctx.channel.id)
             try:
                 await sticky_info['last_message'].delete()
             except (discord.NotFound, discord.Forbidden):
@@ -75,9 +74,7 @@ class PinCog(commands.Cog):
                 delete_after=15
             )
         else:
-            # In ra các lỗi khác để debug
             print(f"Lỗi xảy ra trong cog Pin: {error}")
-
 
 async def setup(bot):
     await bot.add_cog(PinCog(bot, bot.sticky_messages))
