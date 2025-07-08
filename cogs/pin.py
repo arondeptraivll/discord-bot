@@ -33,14 +33,16 @@ class PinCog(commands.Cog):
         except discord.NotFound:
             pass # Tin nhắn có thể đã bị xóa
 
-        # Định dạng nội dung tin nhắn ghim
-        formatted_content = f"## 📌 Tin Nhắn Được Ghim\n\n{message_content}"
+        # --- DÒNG CODE ĐƯỢC THAY ĐỔI Ở ĐÂY ---
+        # Thêm các ký tự `\n` để tạo khoảng trống.
+        # Mỗi `\n\n` sẽ tạo ra một dòng trống trong Discord.
+        # Ở đây ta dùng 4 ký tự `\n` để tạo 3 dòng trống.
+        formatted_content = f"## 📌 Tin Nhắn Được Ghim\n\n\n\n{message_content}"
 
         # Gửi tin nhắn ghim mới
         new_sticky_message = await ctx.send(formatted_content)
 
         # Lưu thông tin về tin nhắn ghim vào dictionary
-        # Key là ID của kênh, value là nội dung và đối tượng tin nhắn đã gửi
         self.sticky_messages[ctx.channel.id] = {
             'content': formatted_content,
             'last_message': new_sticky_message
