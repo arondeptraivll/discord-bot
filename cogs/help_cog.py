@@ -28,16 +28,16 @@ class HelpCog(commands.Cog):
         
         # ====> THAY ĐỔI CÁC DÒNG DƯỚI ĐÂY <====
         help_text = (
-            "**CÁC LỆNH HIỆN TẠI (MUỐN CÓ THÊM LỆNH GÌ NHẮN ADMIN)**\n"
+            "**CÁC LỆNH HIỆN CÓ (MUỐN CÓ THÊM LỆNH GÌ NHẮN ADMIN)**\n" # <--- ĐÃ SỬA LẠI TÊN
             "_ _\n"
             "```\n"
-            "!embed [tiêu đề]\n"  # <-- Đã đổi
+            "!embed [tiêu đề]\n"
             "[nội dung]\n"
             "```\n"
             "➡️ **Chức năng:** Tạo ra một embed đẹp với tiêu đề và nội dung.\n"
             "_ _\n"
             "```\n"
-            "!deletebotmsg [message id]\n"  # <-- Đã đổi
+            "!deletebotmsg [message id]\n"
             "```\n"
             "➡️ **Chức năng:** Xóa tin nhắn do bot gửi (nếu lỡ nhập sai hoặc muốn dọn dẹp).\n"
             "_ _\n"
