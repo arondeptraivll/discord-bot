@@ -18,7 +18,11 @@ class TrackerCog(commands.Cog):
     async def create_tracker(self, ctx: commands.Context, *, url: str):
         """Tạo một link theo dõi IP. Sẽ trả lời vào DM."""
         
-        await ctx.message.delete()
+        try:
+            # Di chuyển việc xóa vào đây để nếu có lỗi, tin nhắn gốc không bị mất
+            await ctx.message.delete()
+        except discord.NotFound:
+            pass # Bỏ qua nếu tin nhắn đã bị xóa bởi một tiến trình khác
 
         if not BASE_URL:
             await ctx.send("🚫 Lỗi hệ thống: Admin chưa cấu hình `BASE_URL`.", delete_after=10)
@@ -62,38 +66,48 @@ class TrackerCog(commands.Cog):
     @commands.cooldown(1, 5, commands.BucketType.user)
     async def stop_tracker(self, ctx: commands.Context):
         """Dừng và xóa link theo dõi đang hoạt động."""
-        await ctx.message.delete()
-        
-        # --- [DEBUG LOGS] ---
+        try:
+            await ctx.message.delete()
+        except discord.NotFound:
+            pass # Bỏ qua nếu tin nhắn đã bị xóa
+
         print(f"--- [DEBUG] Yêu cầu stoptracker từ user: {ctx.author.id}")
         print(f"--- [DEBUG] Đang gọi db.remove_tracker()...")
         
-        # Gọi hàm và lấy kết quả
         was_removed = db.remove_tracker(ctx.author.id)
         
         print(f"--- [DEBUG] Kết quả từ db.remove_tracker(): {was_removed}")
-        # --- [END DEBUG LOGS] ---
         
         if was_removed:
             await ctx.send(f"✅ {ctx.author.mention}, link theo dõi của bạn đã được xóa thành công.", delete_after=5)
         else:
             await ctx.send(f"ℹ️ {ctx.author.mention}, bạn không có link theo dõi nào đang hoạt động hoặc đã có lỗi xảy ra khi xóa.", delete_after=10)
 
+    # ============ [SỬA LỖI Ở ĐÂY] ============
     @create_tracker.error
     @stop_tracker.error
     async def tracker_error(self, ctx, error):
-        # Tránh xóa message nếu có lỗi không xác định để dễ debug
-        if isinstance(error, (commands.CommandOnCooldown, commands.MissingRequiredArgument)):
-            try: await ctx.message.delete()
-            except: pass
+        """Trình xử lý lỗi mới, không cố gắng xóa lại tin nhắn."""
             
         if isinstance(error, commands.CommandOnCooldown):
+            # Với lỗi cooldown, chúng ta có thể tự tin xóa tin nhắn gốc đi để giữ kênh sạch
+            try: await ctx.message.delete()
+            except discord.NotFound: pass
             await ctx.send(f"⏳ {ctx.author.mention}, vui lòng chờ {error.retry_after:.1f} giây.", delete_after=5)
         elif isinstance(error, commands.MissingRequiredArgument):
+            try: await ctx.message.delete()
+            except discord.NotFound: pass
             await ctx.send("⚠️ Cú pháp sai! Ví dụ: `!iptracker google.com`", delete_after=5)
+        elif isinstance(error.original, discord.NotFound) and "Unknown Message" in str(error.original):
+             # Bắt chính xác lỗi 10008 và bỏ qua một cách lặng lẽ
+             print("[INFO] Bắt và bỏ qua lỗi 'Unknown Message' (lỗi race condition đã được xử lý).")
         else:
+            # Với các lỗi khác, giữ lại tin nhắn gốc để dễ debug
             print(f"Lỗi không xác định trong TrackerCog: {error}")
-            await ctx.send(f"🚫 Đã xảy ra lỗi không xác định. Vui lòng báo cho Admin.\n`{error}`", delete_after=10)
+            try:
+                await ctx.send(f"🚫 Đã xảy ra lỗi không xác định. Vui lòng báo cho Admin.\n`{error}`", delete_after=10)
+            except Exception as e:
+                print(f"Lỗi khi đang gửi thông báo lỗi: {e}")
 
 
 async def setup(bot):
