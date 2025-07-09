@@ -21,7 +21,7 @@ def format_duration(seconds: float) -> str:
     if seconds > 0 or not parts:
         parts.append(f"{seconds} giây")
     
-    return ", ".join(parts)
+    return ", ".join(parts) if parts else "0 giây"
 
 class AfkCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
@@ -34,6 +34,12 @@ class AfkCog(commands.Cog):
         # Bỏ qua nếu tin nhắn từ bot hoặc trong tin nhắn riêng
         if message.author.bot or not message.guild:
             return
+            
+        # ===> SỬA LỖI TẠI ĐÂY <===
+        # Nếu tin nhắn bắt đầu bằng prefix của bot, bỏ qua để hệ thống lệnh xử lý
+        if message.content.startswith(self.bot.command_prefix):
+            return
+        # ==========================
 
         # 1. Tự động gỡ AFK khi người dùng chat lại
         if message.author.id in self.afk_users:
