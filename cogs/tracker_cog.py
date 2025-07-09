@@ -1,4 +1,3 @@
-# cogs/tracker_cog.py
 import discord
 from discord.ext import commands
 import os
@@ -11,98 +10,81 @@ class TrackerCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         if not BASE_URL:
-            print("⚠️  CẢNH BÁO: Biến môi trường BASE_URL chưa được thiết lập trong file .env!")
-            print("⚠️  Chức năng IP Tracker sẽ không hoạt động chính xác.")
-
+            print("⚠️  CẢNH BÁO: Biến môi trường BASE_URL chưa được thiết lập!")
 
     @commands.command(name='iptracker')
     @commands.cooldown(1, 10, commands.BucketType.user)
-    @commands.dm_only() # Lệnh này chỉ nên dùng trong DM để đảm bảo riêng tư
+    # XÓA @commands.dm_only()
     async def create_tracker(self, ctx: commands.Context, *, url: str):
-        """Tạo một link theo dõi IP và thông tin trình duyệt."""
+        """Tạo một link theo dõi IP. Sẽ trả lời vào DM."""
         
-        # Kiểm tra xem BASE_URL đã được cấu hình chưa
+        await ctx.message.delete() # Xóa tin nhắn lệnh gốc
+
         if not BASE_URL:
-            await ctx.send("🚫 Lỗi hệ thống: Admin chưa cấu hình `BASE_URL`. Vui lòng liên hệ Admin.")
+            await ctx.send("🚫 Lỗi hệ thống: Admin chưa cấu hình `BASE_URL`.", delete_after=10)
             return
 
-        # Kiểm tra xem người dùng đã có link nào chưa
         if db.get_tracker_by_creator(ctx.author.id):
-            embed = discord.Embed(
-                title="🚫 Lỗi: Bạn đã có một link theo dõi đang hoạt động",
-                description="Mỗi người chỉ được tạo một link theo dõi tại một thời điểm.\n"
-                            "Hãy dùng `!stopiptracker` để xóa link cũ trước khi tạo link mới.",
-                color=discord.Color.red()
-            )
-            await ctx.send(embed=embed)
+            await ctx.send(f"🚫 {ctx.author.mention}, bạn đã có link đang hoạt động. Dùng `!stopiptracker` để xóa link cũ.", delete_after=10)
             return
 
-        # Kiểm tra định dạng URL
         if not url.startswith(('http://', 'https://')):
             url = 'https://' + url
             
         if not validators.url(url):
-            embed = discord.Embed(
-                title="🚫 Lỗi: URL không hợp lệ",
-                description="Vui lòng cung cấp một URL hợp lệ. Ví dụ:\n"
-                            "`!iptracker google.com`\n"
-                            "`!iptracker https://youtube.com/watch?v=dQw4w9WgXcQ`",
-                color=discord.Color.orange()
-            )
-            await ctx.send(embed=embed)
+            await ctx.send(f"🚫 {ctx.author.mention}, URL không hợp lệ. Vui lòng cung cấp URL đúng. Ví dụ: `!iptracker google.com`", delete_after=10)
             return
             
-        # Tạo tracker trong database
         try:
             tracker_id = db.add_tracker(ctx.author.id, url)
             tracking_url = f"{BASE_URL}/track/{tracker_id}"
             
             embed = discord.Embed(
-                title="✅ Link theo dõi đã được tạo thành công!",
-                description="Gửi link này cho 'nạn nhân'. Mỗi khi có người truy cập, tôi sẽ gửi thông báo chi tiết vào DM này cho bạn.",
+                title="✅ Link theo dõi đã được tạo!",
+                description="Gửi link này cho 'nạn nhân'. Mỗi khi có người truy cập, tôi sẽ gửi thông báo chi tiết vào DM cho bạn.",
                 color=discord.Color.blue()
             )
             embed.add_field(name="🔗 Link theo dõi của bạn", value=f"```{tracking_url}```", inline=False)
-            embed.add_field(name="🎯 Link đích (sẽ chuyển hướng đến)", value=url, inline=False)
+            embed.add_field(name="🎯 Link đích (chuyển hướng đến)", value=url, inline=False)
             embed.set_footer(text="Dùng lệnh !stopiptracker để xóa link này.")
-            await ctx.send(embed=embed)
             
+            # GỬI KẾT QUẢ VÀO DM CỦA NGƯỜI DÙNG
+            await ctx.author.send(embed=embed)
+            await ctx.send(f"✅ {ctx.author.mention}, tôi đã gửi link theo dõi vào tin nhắn riêng của bạn!", delete_after=5)
+
+        except discord.Forbidden:
+             # Xử lý trường hợp người dùng khóa DM
+            await ctx.send(f"🚫 {ctx.author.mention}, tôi không thể gửi tin nhắn cho bạn. Vui lòng mở khóa tin nhắn riêng từ thành viên server này.", delete_after=10)
+            db.remove_tracker(ctx.author.id) # Xóa link đã tạo vì không gửi được
         except Exception as e:
             print(f"Lỗi khi tạo tracker: {e}")
-            await ctx.send("🚫 Đã có lỗi xảy ra phía server, vui lòng thử lại sau.")
+            await ctx.send("🚫 Đã có lỗi xảy ra phía server, vui lòng thử lại sau.", delete_after=10)
 
     @commands.command(name='stopiptracker')
     @commands.cooldown(1, 5, commands.BucketType.user)
-    @commands.dm_only()
+    # XÓA @commands.dm_only()
     async def stop_tracker(self, ctx: commands.Context):
-        """Dừng và xóa link theo dõi đang hoạt động của bạn."""
+        """Dừng và xóa link theo dõi đang hoạt động."""
+        await ctx.message.delete() # Xóa tin nhắn lệnh gốc
         if db.remove_tracker(ctx.author.id):
-            embed = discord.Embed(
-                title="✅ Đã dừng thành công",
-                description="Link theo dõi của bạn đã được xóa khỏi hệ thống. Bạn có thể tạo một link mới.",
-                color=discord.Color.green()
-            )
-            await ctx.send(embed=embed)
+            await ctx.send(f"✅ {ctx.author.mention}, link theo dõi của bạn đã được xóa thành công.", delete_after=5)
         else:
-            embed = discord.Embed(
-                title="ℹ️ Thông tin",
-                description="Bạn không có link theo dõi nào đang hoạt động.",
-                color=discord.Color.light_grey()
-            )
-            await ctx.send(embed=embed)
+            await ctx.send(f"ℹ️ {ctx.author.mention}, bạn không có link theo dõi nào đang hoạt động.", delete_after=5)
 
     @create_tracker.error
-    @stop_tracker.error
     async def tracker_error(self, ctx, error):
         if isinstance(error, commands.CommandOnCooldown):
-            await ctx.send(f"⏳ Vui lòng chờ {error.retry_after:.1f} giây trước khi dùng lệnh này lần nữa.")
-        elif isinstance(error, commands.PrivateMessageOnly):
-             await ctx.send("🚫 Lệnh này chỉ có thể được sử dụng trong tin nhắn riêng (DM) với bot để đảm bảo sự riêng tư.", delete_after=10)
-             await ctx.message.delete(delay=10)
+            await ctx.message.delete()
+            await ctx.send(f"⏳ {ctx.author.mention}, vui lòng chờ {error.retry_after:.1f} giây.", delete_after=5)
         elif isinstance(error, commands.MissingRequiredArgument):
-            await ctx.send("⚠️ Cú pháp sai! Vui lòng nhập URL. Ví dụ: `!iptracker google.com`")
+            await ctx.message.delete()
+            await ctx.send("⚠️ Cú pháp sai! Ví dụ: `!iptracker google.com`", delete_after=5)
         else:
+            # Không xóa tin nhắn gốc để dễ debug
             print(f"Lỗi không xác định trong TrackerCog: {error}")
+            await ctx.send(f"🚫 Đã xảy ra lỗi không xác định. Vui lòng báo cho Admin.\n`{error}`", delete_after=10)
+
+# Phần async def setup(bot) giữ nguyên không đổi
 
 async def setup(bot):
     await bot.add_cog(TrackerCog(bot))
