@@ -24,11 +24,13 @@ class HelpCog(commands.Cog):
 
     @commands.command(name='help')
     async def help_command(self, ctx: commands.Context):
+        # Lệnh help sẽ tự xóa sau 300 giây (5 phút) hoặc khi người dùng bấm nút xóa
+        # nên việc xóa message gốc ngay lập tức sẽ hợp lý hơn
         await ctx.message.delete()
         
-        # ====> THAY ĐỔI CÁC DÒNG DƯỚI ĐÂY <====
+        # ====> NỘI DUNG ĐÃ ĐƯỢC BỔ SUNG TẠI ĐÂY <====
         help_text = (
-            "**CÁC LỆNH HIỆN CÓ (MUỐN CÓ THÊM LỆNH GÌ NHẮN ADMIN)**\n" # <--- ĐÃ SỬA LẠI TÊN
+            "**CÁC LỆNH HIỆN CÓ (MUỐN CÓ THÊM LỆNH GÌ NHẮN ADMIN)**\n"
             "_ _\n"
             "```\n"
             "!embed [tiêu đề]\n"
@@ -41,12 +43,24 @@ class HelpCog(commands.Cog):
             "```\n"
             "➡️ **Chức năng:** Xóa tin nhắn do bot gửi (nếu lỡ nhập sai hoặc muốn dọn dẹp).\n"
             "_ _\n"
+            "```\n"
+            "!afk [lí do - tùy chọn]\n"
+            "```\n"
+            "➡️ **Chức năng:** Đặt trạng thái vắng mặt (AFK). Bot sẽ tự động thông báo khi có người tag bạn. Trạng thái sẽ tự gỡ khi bạn chat lại.\n"
+            "_ _\n"
+            "```\n"
+            "!noafk\n"
+            "```\n"
+            "➡️ **Chức năng:** Gỡ trạng thái AFK của bạn một cách thủ công.\n"
+            "_ _\n"
             
             "*Làm sao để lấy ID tin nhắn? Vào `Cài đặt > Nâng cao > Bật Chế độ nhà phát triển`. Sau đó chuột phải vào tin nhắn bất kỳ và chọn `Copy Message ID`.*"
         )
         
         view = HelpView(author=ctx.author)
-        await ctx.send(help_text, view=view)
+        # Gửi tin nhắn help ở chế độ "ephemeral" để chỉ người yêu cầu mới thấy, tránh làm phiền kênh chat
+        # Nếu muốn ai cũng thấy thì bỏ ephemeral=True
+        await ctx.send(help_text, view=view, ephemeral=True, delete_after=300)
 
 async def setup(bot):
     await bot.add_cog(HelpCog(bot))
