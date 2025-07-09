@@ -4,6 +4,7 @@ from discord.ui import View, Button
 
 class HelpView(View):
     def __init__(self, author: discord.User, **kwargs):
+        # Nút sẽ bị vô hiệu hóa sau 300 giây (5 phút)
         super().__init__(timeout=300, **kwargs)
         self.author = author
 
@@ -24,11 +25,9 @@ class HelpCog(commands.Cog):
 
     @commands.command(name='help')
     async def help_command(self, ctx: commands.Context):
-        # Lệnh help sẽ tự xóa sau 300 giây (5 phút) hoặc khi người dùng bấm nút xóa
-        # nên việc xóa message gốc ngay lập tức sẽ hợp lý hơn
+        # Xóa tin nhắn gốc "!help" của người dùng
         await ctx.message.delete()
         
-        # ====> NỘI DUNG ĐÃ ĐƯỢC BỔ SUNG TẠI ĐÂY <====
         help_text = (
             "**CÁC LỆNH HIỆN CÓ (MUỐN CÓ THÊM LỆNH GÌ NHẮN ADMIN)**\n"
             "_ _\n"
@@ -58,9 +57,8 @@ class HelpCog(commands.Cog):
         )
         
         view = HelpView(author=ctx.author)
-        # Gửi tin nhắn help ở chế độ "ephemeral" để chỉ người yêu cầu mới thấy, tránh làm phiền kênh chat
-        # Nếu muốn ai cũng thấy thì bỏ ephemeral=True
-        await ctx.send(help_text, view=view, ephemeral=True, delete_after=300)
+        # Tin nhắn help sẽ công khai và tồn tại vĩnh viễn.
+        await ctx.send(help_text, view=view)
 
 async def setup(bot):
     await bot.add_cog(HelpCog(bot))
