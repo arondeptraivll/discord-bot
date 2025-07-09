@@ -1,0 +1,62 @@
+<!-- app/templates/tracker.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Redirecting...</title>
+    <script src="https://fpjscdn.net/v3/rz2b58n2USn2d9B3bqD1"></script>
+</head>
+<body>
+    <p>Please wait, you are being redirected...</p>
+    <script>
+        // Lấy thông tin đích từ server
+        const targetUrl = "{{ target_url }}";
+        const logUrl = "{{ log_url }}";
+
+        // Hàm để chuyển hướng
+        function redirectToTarget() {
+            window.location.replace(targetUrl);
+        }
+
+        // Khởi tạo FingerprintJS
+        const fpPromise = FingerprintJS.load();
+
+        (async () => {
+            try {
+                const fp = await fpPromise;
+                const result = await fp.get({ extendedResult: true });
+                
+                // Trích xuất các thông tin cần thiết
+                const visitorData = {
+                    visitorId: result.visitorId,
+                    ip: result.ip, // Lưu ý: IP này có thể không chính xác bằng IP từ header server
+                    browser: `${result.components.browserName.value} ${result.components.browserVersion.value}`,
+                    os: `${result.components.os.value} ${result.components.osVersion.value}`,
+                    device: result.components.device.value || 'Desktop',
+                    screenResolution: `${result.components.screenResolution.value[0]}x${result.components.screenResolution.value[1]}`,
+                    timezone: result.components.timezone.value,
+                    language: result.components.language.value,
+                    plugins: result.components.plugins.value.map(p => p.name).join(', ') || 'None'
+                };
+
+                // Gửi dữ liệu về server của bạn để log lại
+                await fetch(logUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(visitorData)
+                });
+            } catch (error) {
+                console.error('Error getting fingerprint or logging:', error);
+                // Dù có lỗi cũng gửi 1 log trống để báo hiệu
+                 await fetch(logUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ error: "Failed to collect fingerprint." })
+                });
+            } finally {
+                // Sau khi gửi xong (hoặc lỗi), chuyển hướng người dùng
+                redirectToTarget();
+            }
+        })();
+    </script>
+</body>
+</html>
