@@ -1,26 +1,28 @@
+# main.py
 import discord
 from discord.ext import commands
 import os
 import asyncio
 from dotenv import load_dotenv
-from keep_alive import keep_alive
+
+# THAY ĐỔI TẠI ĐÂY
+# Import hàm khởi động server từ file app/server.py
+from app.server import start_web_server 
 
 # Load biến môi trường từ file .env
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 
-# Cài đặt Intents cho bot (các quyền mà bot cần)
+# Cài đặt Intents cho bot
 intents = discord.Intents.default()
 intents.message_content = True
 intents.guilds = True
 intents.members = True
 
-# === THAY ĐỔI TẠI ĐÂY ===
-# Khởi tạo bot với prefix '!' và các intents đã thiết lập
-bot = commands.Bot(command_prefix='!', intents=intents) # <--- ĐÃ SỬA
-# ========================
+# Khởi tạo bot
+bot = commands.Bot(command_prefix='!', intents=intents)
 
-# Xóa lệnh help mặc định
+# Xóa lệnh help mặc định (nếu bạn có help_cog riêng)
 bot.remove_command('help')
 
 # --- Event khi bot đã sẵn sàng ---
@@ -41,17 +43,18 @@ async def on_ready():
 
 # --- Hàm chính để chạy bot ---
 async def main():
+    # Load cogs
     print("Loading cogs...")
     for filename in os.listdir('./cogs'):
-        if filename.endswith('.py'):
+        if filename.endswith('.py') and not filename.startswith('_'):
             try:
                 await bot.load_extension(f'cogs.{filename[:-3]}')
                 print(f'✅ Loaded Cog: {filename}')
             except Exception as e:
                 print(f'❌ Failed to load cog {filename}: {type(e).__name__} - {e}')
     
-    # Giữ bot sống trên Render
-    keep_alive()
+    # BẮT ĐẦU WEB SERVER (thay thế cho keep_alive)
+    start_web_server(bot)
     
     # Chạy bot
     try:
@@ -61,4 +64,7 @@ async def main():
 
 # Chạy hàm main
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\nBot is shutting down.")
