@@ -1,65 +1,133 @@
 import discord
 from discord.ext import commands
-from discord.ui import View, Button
+import datetime
 
-class HelpView(View):
-    def __init__(self, author: discord.User, **kwargs):
-        # Timeout cho view là 300 giây (5 phút)
-        super().__init__(timeout=300, **kwargs)
-        self.author = author
+afk_users = {}
 
-    async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        if interaction.user.id == self.author.id:
-            return True
-        else:
-            await interaction.response.send_message("🚫 Bạn không phải người đã yêu cầu trợ giúp này.", ephemeral=True)
-            return False
+def format_duration(seconds: float) -> str:
+    seconds = int(seconds)
+    days, seconds = divmod(seconds, 86400)
+    hours, seconds = divmod(seconds, 3600)
+    minutes, seconds = divmod(seconds, 60)
+    
+    parts = []
+    if days > 0: parts.append(f"{days} ngày")
+    if hours > 0: parts.append(f"{hours} giờ")
+    if minutes > 0: parts.append(f"{minutes} phút")
+    if seconds > 0 or not parts:
+        parts.append(f"{seconds} giây")
+    
+    return ", ".join(parts) if parts else "0 giây"
 
-    @discord.ui.button(label="🗑️ Xóa tin nhắn", style=discord.ButtonStyle.danger)
-    async def delete_button(self, interaction: discord.Interaction, button: Button):
-        await interaction.message.delete()
-
-class HelpCog(commands.Cog):
+class AfkCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.afk_users = afk_users 
 
-    @commands.command(name='help')
-    async def help_command(self, ctx: commands.Context):
-        # Xóa tin nhắn gốc "!help" của người dùng
+    async def _clear_afk_status(self, user_id: int):
+        if user_id in self.afk_users:
+            afk_data = self.afk_users.pop(user_id)
+            try:
+                channel = self.bot.get_channel(afk_data['channel_id'])
+                if channel:
+                    original_afk_message = await channel.fetch_message(afk_data['message_id'])
+                    await original_afk_message.delete()
+            except (discord.NotFound, discord.Forbidden):
+                pass
+            return afk_data
+        return None
+
+    @commands.Cog.listener()
+    async def on_message(self, message: discord.Message):
+        if message.author.bot or not message.guild:
+            return
+
+        ctx = await self.bot.get_context(message)
+        if ctx.valid:
+            return
+
+        # Tự động gỡ AFK
+        if message.author.id in self.afk_users:
+            afk_data = await self._clear_afk_status(message.author.id)
+            if afk_data:
+                start_time = afk_data['start_time']
+                duration = datetime.datetime.now(datetime.timezone.utc) - start_time
+                embed = discord.Embed(
+                    description=f"👋 **{message.author.display_name}** đã quay trở lại sau khi AFK **{format_duration(duration.total_seconds())}**.",
+                    color=discord.Color.green()
+                )
+                await message.channel.send(embed=embed, delete_after=5)
+
+        # Kiểm tra mention người đang AFK
+        if message.mentions:
+            for user in message.mentions:
+                if user.id in self.afk_users:
+                    afk_data = self.afk_users[user.id]
+                    afk_timestamp = f"<t:{int(afk_data['start_time'].timestamp())}:R>"
+                    log_embed = discord.Embed(
+                        description=f"💤 **{user.display_name}** đang AFK {afk_timestamp}: `{afk_data['reason']}`",
+                        color=discord.Color.light_grey()
+                    )
+                    try:
+                        await message.reply(embed=log_embed, delete_after=6, silent=True)
+                        await message.delete()
+                    except discord.Forbidden:
+                        await message.reply("Lỗi: Bot cần quyền `Manage Messages`.", delete_after=5)
+                    break
+
+    @commands.command(name='afk')
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    async def set_afk(self, ctx: commands.Context, *, reason: str = "Không có lí do cụ thể"):
         await ctx.message.delete()
         
-        help_text = (
-            "**CÁC LỆNH HIỆN CÓ (MUỐN CÓ THÊM LỆNH GÌ NHẮN ADMIN)**\n"
-            "_ _\n"
-            "```\n"
-            "!embed [tiêu đề]\n"
-            "[nội dung]\n"
-            "```\n"
-            "➡️ **Chức năng:** Tạo ra một embed đẹp với tiêu đề và nội dung.\n"
-            "_ _\n"
-            "```\n"
-            "!deletebotmsg [message id]\n"
-            "```\n"
-            "➡️ **Chức năng:** Xóa tin nhắn do bot gửi (nếu lỡ nhập sai hoặc muốn dọn dẹp).\n"
-            "_ _\n"
-            "```\n"
-            "!afk [lí do - tùy chọn]\n"
-            "```\n"
-            "➡️ **Chức năng:** Đặt trạng thái vắng mặt (AFK). Bot sẽ tự động thông báo khi có người tag bạn. Trạng thái sẽ tự gỡ khi bạn chat lại.\n"
-            "_ _\n"
-            "```\n"
-            "!noafk\n"
-            "```\n"
-            "➡️ **Chức năng:** Gỡ trạng thái AFK của bạn một cách thủ công.\n"
-            "_ _\n"
-            
-            "*Làm sao để lấy ID tin nhắn? Vào `Cài đặt > Nâng cao > Bật Chế độ nhà phát triển`. Sau đó chuột phải vào tin nhắn bất kỳ và chọn `Copy Message ID`.*"
+        if ctx.author.id in self.afk_users:
+            await ctx.send("⚠️ Bạn đã ở trong trạng thái AFK rồi.", delete_after=5)
+            return
+
+        embed = discord.Embed(
+            title=f"💤 {ctx.author.display_name} Đang AFK!",
+            description=f"**Lí do:** {reason}\n_Gõ một tin nhắn bất kỳ để trở lại._",
+            color=discord.Color.orange()
         )
+        embed.set_thumbnail(url=ctx.author.avatar)
+        afk_message = await ctx.send(embed=embed)
         
-        view = HelpView(author=ctx.author)
-        # ===> THAY ĐỔI TẠI ĐÂY <===
-        # Đã xóa `delete_after=300`. Tin nhắn help giờ sẽ tồn tại vĩnh viễn.
-        await ctx.send(help_text, view=view)
+        self.afk_users[ctx.author.id] = {
+            'reason': reason,
+            'start_time': datetime.datetime.now(datetime.timezone.utc),
+            'message_id': afk_message.id,
+            'channel_id': ctx.channel.id
+        }
+
+    @commands.command(name='noafk')
+    @commands.cooldown(1, 5, commands.BucketType.user)
+    async def remove_afk(self, ctx: commands.Context):
+        await ctx.message.delete()
+
+        if ctx.author.id not in self.afk_users:
+            await ctx.send("⚠️ Bạn không ở trong trạng thái AFK.", delete_after=5)
+            return
+            
+        afk_data = await self._clear_afk_status(ctx.author.id)
+        if afk_data:
+            start_time = afk_data['start_time']
+            duration = datetime.datetime.now(datetime.timezone.utc) - start_time
+            embed = discord.Embed(
+                title=f"👋 {ctx.author.display_name} Đã Quay Trở Lại!",
+                description=f"Bạn đã quay trở lại sau khi AFK **{format_duration(duration.total_seconds())}**.",
+                color=discord.Color.green()
+            )
+            await ctx.send(embed=embed, delete_after=5)
+        
+    @set_afk.error
+    @remove_afk.error
+    async def afk_error(self, ctx, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            try: await ctx.message.delete()
+            except: pass
+            await ctx.send(f"⏳ Vui lòng chờ {error.retry_after:.1f} giây.", delete_after=5)
+        else:
+            print(f"An unexpected error occurred in AFK cog: {error}")
 
 async def setup(bot):
-    await bot.add_cog(HelpCog(bot))
+    await bot.add_cog(AfkCog(bot))
