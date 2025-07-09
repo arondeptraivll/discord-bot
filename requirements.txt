@@ -2,3 +2,4 @@ discord.py
 python-dotenv
 Flask
 validators
+psycopg2-binary  # <--- THÊM DÒNG NÀY
