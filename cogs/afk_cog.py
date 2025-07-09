@@ -28,16 +28,23 @@ class AfkCog(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        # Bỏ qua tin nhắn từ bot hoặc trong DM
         if message.author.bot or not message.guild:
             return
 
-        # <--- SỬA LỖI TẠI ĐÂY (PHẦN 1) ---
-        # 1. Tự động gỡ AFK khi người dùng chat lại
-        #    Thêm điều kiện: CHỈ gỡ AFK nếu người dùng có trong danh sách
-        #    VÀ tin nhắn của họ KHÔNG phải là lệnh `!afk`
-        if (message.author.id in self.afk_users and
-            not message.content.lower().startswith(f'{self.bot.command_prefix}afk')):
-            
+        # ===> THAY ĐỔI DỨT ĐIỂM SỐ 1: KIỂM TRA LỆNH <===
+        # Lấy context của tin nhắn. Đây là cách chuẩn để biết tin nhắn có phải là lệnh không.
+        ctx = await self.bot.get_context(message)
+        # Nếu `ctx.valid` là True, có nghĩa đây là một lệnh hợp lệ (!afk, !help, etc.)
+        # => Dừng ngay listener này và để cho hệ thống lệnh tự xử lý.
+        #    Điều này ngăn chặn hoàn toàn việc on_message can thiệp vào lệnh.
+        if ctx.valid:
+            return
+
+        # Từ đây trở xuống, code chỉ chạy với các tin nhắn THÔNG THƯỜNG (không phải lệnh).
+        
+        # 1. Tự động gỡ AFK khi người dùng chat
+        if message.author.id in self.afk_users:
             afk_data = self.afk_users.pop(message.author.id)
             start_time = afk_data['start_time']
             duration = datetime.datetime.now(datetime.timezone.utc) - start_time
@@ -69,14 +76,14 @@ class AfkCog(commands.Cog):
                         await message.reply(embed=log_embed, delete_after=15, silent=True)
                     except discord.Forbidden:
                         pass
-                    break
+                    break # Chỉ cần báo cho người đầu tiên được mention là đủ
 
-        # <--- SỬA LỖI TẠI ĐÂY (PHẦN 2) ---
-        # Phải thêm dòng này vào cuối `on_message` để bot có thể xử lý
-        # các lệnh như !afk, !help, !embed...
-        await self.bot.process_commands(message)
+        # ===> THAY ĐỔI DỨT ĐIỂM SỐ 2: XÓA PROCESS_COMMANDS <===
+        # Dòng `await self.bot.process_commands(message)` đã được XÓA BỎ
+        # vì nó chính là nguyên nhân gây ra việc thực thi lệnh 2 lần.
 
     @commands.command(name='afk')
+    @commands.cooldown(1, 5, commands.BucketType.user) # Thêm cooldown để chống spam
     async def set_afk(self, ctx: commands.Context, *, reason: str = "Không có lí do cụ thể"):
         """Đặt trạng thái AFK cho bản thân."""
         if ctx.author.id in self.afk_users:
@@ -97,6 +104,7 @@ class AfkCog(commands.Cog):
         await ctx.reply(embed=embed)
 
     @commands.command(name='noafk')
+    @commands.cooldown(1, 5, commands.BucketType.user)
     async def remove_afk(self, ctx: commands.Context):
         """Gỡ trạng thái AFK của bản thân."""
         if ctx.author.id not in self.afk_users:
@@ -114,7 +122,12 @@ class AfkCog(commands.Cog):
         )
         embed.set_thumbnail(url=ctx.author.avatar)
         await ctx.reply(embed=embed)
-
+        
+    @set_afk.error
+    @remove_afk.error
+    async def afk_error(self, ctx, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.send(f"⏳ Vui lòng chờ {error.retry_after:.1f} giây trước khi dùng lệnh này nữa.", delete_after=5)
 
 async def setup(bot):
     await bot.add_cog(AfkCog(bot))
