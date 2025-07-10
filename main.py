@@ -22,10 +22,6 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # Xóa lệnh help mặc định
 bot.remove_command('help')
 
-# Dùng để lưu các session xác minh captcha đang chờ
-# Sẽ được chia sẻ giữa các cogs và web server
-bot.verification_sessions = {}
-
 # --- Event khi bot đã sẵn sàng ---
 @bot.event
 async def on_ready():
@@ -46,16 +42,16 @@ async def on_ready():
 async def main():
     print("Loading cogs...")
     for filename in os.listdir('./cogs'):
-        if filename.endswith('.py'):
+        # Bỏ qua các file không phải là cog captcha
+        if filename.endswith('.py') and filename != 'captcha_cog.py':
             try:
-                # Truyền bot instance vào khi load extension để các cog có thể truy cập
                 await bot.load_extension(f'cogs.{filename[:-3]}')
                 print(f'✅ Loaded Cog: {filename}')
             except Exception as e:
                 print(f'❌ Failed to load cog {filename}: {type(e).__name__} - {e}')
     
-    # Giữ bot sống và truyền bot instance vào cho Flask
-    keep_alive(bot)
+    # Giữ bot sống trên Render bằng Flask server đơn giản
+    keep_alive()
     
     # Chạy bot
     try:
