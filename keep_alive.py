@@ -5,7 +5,6 @@ import os
 import requests
 import asyncio
 import discord
-import datetime
 
 # Biến toàn cục để lưu bot instance
 _bot = None
@@ -28,10 +27,17 @@ def home():
 # Trang xác minh
 @app.route('/verify/<token>', methods=['GET', 'POST'])
 def verify(token):
+    # Lấy session từ bot.verification_sessions
     session = _bot.verification_sessions.get(token)
     
-    if not session or datetime.datetime.now(datetime.timezone.utc) > session['expires_at']:
-        return render_template('invalid.html', message="Liên kết xác minh không hợp lệ hoặc đã hết hạn."), 404
+    # Chỉ kiểm tra xem session có tồn tại không. Đã loại bỏ kiểm tra thời gian hết hạn.
+    if not session:
+        return render_template('invalid.html', message="Liên kết xác minh không hợp lệ hoặc đã được sử dụng."), 404
+
+    # Bảo mật: Lấy ID người dùng từ session đã lưu, không phải từ người đang truy cập web.
+    # Điều này đảm bảo người dùng A không thể hoàn thành xác minh cho người dùng B.
+    user_id_to_verify = session['user_id']
+    print(f"Attempting verification for user ID: {user_id_to_verify} with token: {token}")
 
     if request.method == 'POST':
         recaptcha_response = request.form.get('g-recaptcha-response')
@@ -40,17 +46,17 @@ def verify(token):
         result = response.json()
 
         if result.get('success'):
-            print(f"User {session['user_id']} verified successfully.")
+            print(f"User ID {user_id_to_verify} verified successfully via web.")
             run_discord_task(handle_successful_verification(token))
             return render_template('success.html')
         else:
-            print(f"User {session['user_id']} failed verification. Reason: {result.get('error-codes')}")
+            print(f"User ID {user_id_to_verify} failed verification. Reason: {result.get('error-codes')}")
             return render_template('verify.html', site_key=os.getenv('RECAPTCHA_SITE_KEY'), token=token, error="Xác minh CAPTCHA thất bại. Vui lòng thử lại.")
 
     return render_template('verify.html', site_key=os.getenv('RECAPTCHA_SITE_KEY'), token=token, error=None)
 
 def run():
-  app.run(host='0.0.0.0', port=8080)
+  app.run(host='0.0.0._0', port=8080)
 
 def keep_alive(bot_instance):
     global _bot
@@ -59,6 +65,7 @@ def keep_alive(bot_instance):
     t.start()
 
 async def handle_successful_verification(token):
+    # Lấy và xóa session để token không thể được sử dụng lại
     session = _bot.verification_sessions.pop(token, None)
     if not session: return
 
@@ -70,12 +77,10 @@ async def handle_successful_verification(token):
 
     unverify_role = discord.utils.get(guild.roles, name="Unverify")
 
-    # Chỉ xóa role 'Unverify' và không làm gì khác
     if unverify_role and unverify_role in member.roles:
         await member.remove_roles(unverify_role, reason="Hoàn thành xác minh Captcha")
         print(f"Đã xóa role 'Unverify' khỏi {member.name}")
 
-    # Xóa tin nhắn xác minh cũ
     try:
         channel = guild.get_channel(session['channel_id'])
         if channel:
