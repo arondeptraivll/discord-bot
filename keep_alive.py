@@ -69,19 +69,18 @@ async def handle_successful_verification(token):
     if not member: return
 
     unverify_role = discord.utils.get(guild.roles, name="Unverify")
-    verified_role = discord.utils.get(guild.roles, name="Verified")
 
+    # Chỉ xóa role 'Unverify' và không làm gì khác
     if unverify_role and unverify_role in member.roles:
         await member.remove_roles(unverify_role, reason="Hoàn thành xác minh Captcha")
-    
-    if verified_role:
-        await member.add_roles(verified_role, reason="Hoàn thành xác minh Captcha")
+        print(f"Đã xóa role 'Unverify' khỏi {member.name}")
 
+    # Xóa tin nhắn xác minh cũ
     try:
         channel = guild.get_channel(session['channel_id'])
         if channel:
             message = await channel.fetch_message(session['message_id'])
             await message.delete()
-            print(f"Deleted verification message for {member.name}")
+            print(f"Đã xóa tin nhắn xác minh của {member.name}")
     except (discord.NotFound, discord.Forbidden):
         pass
