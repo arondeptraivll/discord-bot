@@ -3,4 +3,3 @@ discord.py
 python-dotenv
 Flask
 validators
-requests
