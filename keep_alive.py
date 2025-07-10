@@ -1,4 +1,4 @@
-# keep_alive.py
+# keep_alive.py (ĐÃ SỬA LỖI)
 from flask import Flask, render_template, request
 from threading import Thread
 import os
@@ -27,15 +27,11 @@ def home():
 # Trang xác minh
 @app.route('/verify/<token>', methods=['GET', 'POST'])
 def verify(token):
-    # Lấy session từ bot.verification_sessions
     session = _bot.verification_sessions.get(token)
     
-    # Chỉ kiểm tra xem session có tồn tại không. Đã loại bỏ kiểm tra thời gian hết hạn.
     if not session:
         return render_template('invalid.html', message="Liên kết xác minh không hợp lệ hoặc đã được sử dụng."), 404
 
-    # Bảo mật: Lấy ID người dùng từ session đã lưu, không phải từ người đang truy cập web.
-    # Điều này đảm bảo người dùng A không thể hoàn thành xác minh cho người dùng B.
     user_id_to_verify = session['user_id']
     print(f"Attempting verification for user ID: {user_id_to_verify} with token: {token}")
 
@@ -56,7 +52,8 @@ def verify(token):
     return render_template('verify.html', site_key=os.getenv('RECAPTCHA_SITE_KEY'), token=token, error=None)
 
 def run():
-  app.run(host='0.0.0._0', port=8080)
+  # SỬA LỖI QUAN TRỌNG Ở ĐÂY
+  app.run(host='0.0.0.0', port=8080)
 
 def keep_alive(bot_instance):
     global _bot
@@ -65,7 +62,6 @@ def keep_alive(bot_instance):
     t.start()
 
 async def handle_successful_verification(token):
-    # Lấy và xóa session để token không thể được sử dụng lại
     session = _bot.verification_sessions.pop(token, None)
     if not session: return
 
