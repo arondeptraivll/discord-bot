@@ -26,7 +26,6 @@ class AiCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         if GEMINI_API_KEY:
-            # ===> THAY ĐỔI 1: NÂNG CẤP LÊN GEMINI 1.5 FLASH <===
             self.model = genai.GenerativeModel(
                 model_name='gemini-1.5-flash-latest', 
                 safety_settings=safety_settings
@@ -58,9 +57,7 @@ class AiCog(commands.Cog):
                 
                 await ctx.reply(embed=embed)
                 
-            # ===> THAY ĐỔI 2: XỬ LÝ LỖI TRIỆT ĐỂ HƠN <===
             except (google_exceptions.GoogleAPICallError, google_exceptions.RetryError, Exception) as e:
-                # Bắt tất cả các lỗi tiềm tàng từ API của Google và các lỗi chung khác.
                 print(f"Lỗi khi gọi Gemini API với prompt '{prompt}': {type(e).__name__} - {e}")
                 
                 error_embed = discord.Embed(
@@ -68,19 +65,24 @@ class AiCog(commands.Cog):
                     description="Không thể xử lý yêu cầu của bạn tại thời điểm này. Có thể do lỗi từ máy chủ của AI hoặc câu hỏi quá phức tạp. Vui lòng thử lại sau.",
                     color=discord.Color.red()
                 )
-                await ctx.reply(embed=error_embed)
-                # Dòng "return" này cực kỳ quan trọng. 
-                # Nó sẽ ngăn không cho lỗi bị xử lý thêm lần nữa bởi @ask_ai.error.
+                await ctx.reply(embed=embed)
                 return 
 
     @ask_ai.error
     async def askai_error(self, ctx: commands.Context, error):
-        # Bộ xử lý này giờ chỉ còn xử lý các lỗi của discord.py như Cooldown và thiếu tham số.
-        # Các lỗi từ API đã được xử lý bên trong lệnh ask_ai.
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.reply(f"⏳ Bạn đang thao tác quá nhanh! Vui lòng chờ **{error.retry_after:.1f} giây**.", delete_after=5)
         elif isinstance(error, commands.MissingRequiredArgument):
             await ctx.reply("⚠️ Bạn quên nhập câu hỏi rồi! Cú pháp: `!askai [câu hỏi của bạn]`", delete_after=5)
         else:
-            # Các lỗi không mong muốn khác vẫn sẽ được in ra console để bạn debug.
             print(f"Lỗi không xác định được xử lý bởi askai_error: {error}")
+
+
+# ====> SỬA LỖI QUAN TRỌNG: THÊM LẠI HÀM SETUP BỊ THIẾU <====
+async def setup(bot: commands.Bot):
+    # Chỉ thêm Cog nếu API Key tồn tại
+    if GEMINI_API_KEY:
+        await bot.add_cog(AiCog(bot))
+    else:
+        # Nếu không có key, Cog sẽ không được tải và thông báo đã được in ở trên
+        pass
