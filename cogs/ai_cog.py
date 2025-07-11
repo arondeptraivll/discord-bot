@@ -30,7 +30,6 @@ else:
     print("⚠️ CẢNH BÁO: GEMINI_API_KEY không được tìm thấy. Lệnh !askai sẽ không hoạt động.")
 
 async def fetch_image_from_url(url: str):
-    """Tải dữ liệu ảnh từ URL và trả về (bytes, mime_type)."""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
@@ -54,9 +53,8 @@ class AiCog(commands.Cog):
                 model_name='gemini-2.5-pro',
                 safety_settings=safety_settings
             )
-            # ====> THAY ĐỔI MODEL TẠO ẢNH THEO ĐÚNG YÊU CẦU <====
             self.image_model = genai.GenerativeModel(
-                model_name='models/imagen-4.0-generate-preview-06-06'
+                model_name='models/imagen-4.0-ultra-generate-preview-06-06'
             )
         else:
             self.text_model = None
@@ -69,7 +67,7 @@ class AiCog(commands.Cog):
             await ctx.reply("❌ Rất tiếc, tính năng tạo ảnh chưa được cấu hình đúng cách do thiếu API Key.")
             return
 
-        waiting_message = await ctx.reply(f"🎨 Đang vẽ tranh theo yêu cầu của bạn: `{prompt}`. Vui lòng đợi một chút...")
+        waiting_message = await ctx.reply(f"🎨 Đang vẽ tranh **chất lượng cao** theo yêu cầu của bạn: `{prompt}`. Vui lòng đợi một chút...")
 
         try:
             def generation_func():
@@ -84,24 +82,36 @@ class AiCog(commands.Cog):
                 color=discord.Color.random()
             )
             embed.set_image(url="attachment://generated_image.png")
-            # ====> THÊM FOOTER CHO CHUYÊN NGHIỆP <====
-            embed.set_footer(text="Tạo bởi Google Imagen 4.0", icon_url="https://i.imgur.com/v4vL5V2.png")
+            embed.set_footer(text="Tạo bởi Google Imagen 4.0 Ultra", icon_url="https://i.imgur.com/v4vL5V2.png")
 
             await waiting_message.delete()
             await ctx.reply(embed=embed, file=image_file)
 
+        # ====> NÂNG CẤP KHỐI XỬ LÝ LỖI ĐỂ HIỂN THỊ CHI TIẾT <====
         except Exception as e:
             await waiting_message.delete()
-            print(f"Lỗi khi tạo ảnh với prompt '{prompt}': {type(e).__name__} - {e}")
-            
-            error_message = str(e).lower()
-            user_friendly_error = "Đã có lỗi bất ngờ xảy ra khi tạo ảnh."
-            if "unsupporteduserlocation" in error_message:
-                user_friendly_error = "Rất tiếc, tính năng này không khả dụng tại khu vực của bạn."
-            elif "prompt violates the safety policy" in error_message:
-                user_friendly_error = "Yêu cầu của bạn đã vi phạm chính sách an toàn. Vui lòng thử một ý tưởng khác."
+            # In lỗi đầy đủ ra console để bạn xem lại sau
+            print(f"LỖI CHI TIẾT KHI TẠO ẢNH: {type(e).__name__} - {e}")
 
-            await ctx.reply(f"❌ Lỗi: {user_friendly_error}")
+            # Tạo một embed báo lỗi chi tiết hơn gửi cho người dùng
+            error_type = type(e).__name__
+            error_details = str(e)
+
+            # Cắt bớt chi tiết lỗi nếu quá dài để hiển thị trên Discord
+            if len(error_details) > 1000:
+                error_details = error_details[:1000] + "..."
+
+            error_embed = discord.Embed(
+                title="❌ Tạo ảnh thất bại",
+                description="Đã có lỗi xảy ra khi cố gắng tạo hình ảnh của bạn.",
+                color=discord.Color.red()
+            )
+            error_embed.add_field(name="Loại lỗi API", value=f"`{error_type}`", inline=False)
+            error_embed.add_field(name="Chi tiết lỗi từ Google", value=f"```{error_details}```", inline=False)
+            error_embed.set_footer(text="Gợi ý: Hãy kiểm tra quyền của API Key đối với model Imagen trong Google Cloud.")
+            
+            await ctx.reply(embed=error_embed)
+
 
     @generate_image.error
     async def genimage_error(self, ctx: commands.Context, error):
@@ -110,12 +120,14 @@ class AiCog(commands.Cog):
         elif isinstance(error, commands.MissingRequiredArgument):
             await ctx.reply("⚠️ Bạn quên nhập nội dung để vẽ ảnh rồi! Cú pháp: `!genimage [nội dung bạn muốn vẽ]`", delete_after=7)
         else:
+            # Lỗi này chỉ xảy ra khi có vấn đề với code discord.py, không phải lỗi API
             print(f"Lỗi không xác định trong lệnh genimage: {error}")
-            await ctx.reply("Đã xảy ra một lỗi không xác định. Vui lòng thử lại.", delete_after=5)
+            await ctx.reply("Đã xảy ra một lỗi cú pháp hoặc logic trong nội bộ bot.", delete_after=5)
             
     # Lệnh !askai không thay đổi
     @commands.command(name='askai')
-    @commands.cooldown(1, 15, commands.BucketType.user)
+    # ... (code của !askai giữ nguyên, không cần dán lại)
+    # ...
     async def ask_ai(self, ctx: commands.Context, *, full_input: str):
         if not self.text_model:
             await ctx.reply("❌ Rất tiếc, tính năng AI chưa được cấu hình đúng cách do thiếu API Key.")
