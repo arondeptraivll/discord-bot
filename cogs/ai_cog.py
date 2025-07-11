@@ -50,18 +50,84 @@ class AiCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         if GEMINI_API_KEY:
-            self.model = genai.GenerativeModel(
-                # ====> THAY ĐỔI THEO ĐÚNG YÊU CẦU CỦA BẠN <====
+            # Model để chat và phân tích (như cũ)
+            self.text_model = genai.GenerativeModel(
                 model_name='gemini-2.5-pro',
                 safety_settings=safety_settings
             )
+            # ====> NEW: Model chuyên để tạo hình ảnh <====
+            self.image_model = genai.GenerativeModel(
+                model_name='models/gemini-2.0-flash-preview-image-generation'
+            )
         else:
-            self.model = None
+            self.text_model = None
+            self.image_model = None
 
+    # ====> LỆNH TẠO ẢNH MỚI <====
+    @commands.command(name='genimage')
+    @commands.cooldown(1, 30, commands.BucketType.user) # Tạo ảnh tốn tài nguyên, nên cooldown lâu hơn
+    async def generate_image(self, ctx: commands.Context, *, prompt: str):
+        if not self.image_model:
+            await ctx.reply("❌ Rất tiếc, tính năng tạo ảnh chưa được cấu hình đúng cách do thiếu API Key.")
+            return
+
+        # Gửi tin nhắn chờ để người dùng biết bot đang xử lý
+        waiting_message = await ctx.reply(f"🎨 Đang vẽ tranh theo yêu cầu của bạn: `{prompt}`. Vui lòng đợi một chút...")
+
+        try:
+            # Vì việc tạo ảnh có thể mất thời gian và là một tác vụ blocking,
+            # chúng ta chạy nó trong một executor để không làm bot bị treo.
+            def generation_func():
+                return self.image_model.generate_content(prompt)
+
+            response = await self.bot.loop.run_in_executor(None, generation_func)
+
+            # Lấy dữ liệu bytes của hình ảnh đầu tiên được tạo ra
+            image_bytes = response.images[0]._image_bytes
+
+            # Tạo một đối tượng discord.File từ dữ liệu bytes
+            image_file = discord.File(fp=io.BytesIO(image_bytes), filename="generated_image.png")
+            
+            # Tạo embed để hiển thị ảnh
+            embed = discord.Embed(
+                title=f"🖼️ Ảnh của {ctx.author.display_name} đây",
+                color=discord.Color.random() # Cho màu ngẫu nhiên thêm sinh động
+            )
+            # Set ảnh cho embed. "attachment://" cho Discord biết phải dùng file đính kèm
+            embed.set_image(url="attachment://generated_image.png")
+
+            # Xóa tin nhắn chờ và gửi kết quả cuối cùng
+            await waiting_message.delete()
+            await ctx.reply(embed=embed, file=image_file)
+
+        except Exception as e:
+            await waiting_message.delete()
+            print(f"Lỗi khi tạo ảnh với prompt '{prompt}': {type(e).__name__} - {e}")
+            
+            error_message = str(e).lower()
+            user_friendly_error = "Đã có lỗi bất ngờ xảy ra khi tạo ảnh."
+            if "unsupporteduserlocation" in error_message:
+                user_friendly_error = "Rất tiếc, tính năng này không khả dụng tại khu vực của bạn."
+            elif "prompt violates the safety policy" in error_message:
+                user_friendly_error = "Yêu cầu của bạn đã vi phạm chính sách an toàn. Vui lòng thử một ý tưởng khác."
+
+            await ctx.reply(f"❌ Lỗi: {user_friendly_error}")
+
+    @generate_image.error
+    async def genimage_error(self, ctx: commands.Context, error):
+        if isinstance(error, commands.CommandOnCooldown):
+            await ctx.reply(f"⏳ Bạn đang thao tác quá nhanh! Vui lòng chờ **{error.retry_after:.1f} giây**.", delete_after=5)
+        elif isinstance(error, commands.MissingRequiredArgument):
+            await ctx.reply("⚠️ Bạn quên nhập nội dung để vẽ ảnh rồi! Cú pháp: `!genimage [nội dung bạn muốn vẽ]`", delete_after=7)
+        else:
+            print(f"Lỗi không xác định trong lệnh genimage: {error}")
+            await ctx.reply("Đã xảy ra một lỗi không xác định. Vui lòng thử lại.", delete_after=5)
+            
+    # --- Lệnh !askai (đã chỉnh sửa để dùng self.text_model) ---
     @commands.command(name='askai')
     @commands.cooldown(1, 15, commands.BucketType.user)
     async def ask_ai(self, ctx: commands.Context, *, full_input: str):
-        if not self.model:
+        if not self.text_model:
             await ctx.reply("❌ Rất tiếc, tính năng AI chưa được cấu hình đúng cách do thiếu API Key.")
             return
 
@@ -100,7 +166,8 @@ class AiCog(commands.Cog):
             content_parts.append(prompt)
 
             try:
-                response = await self.model.generate_content_async(content_parts)
+                # Sử dụng self.text_model thay vì self.model
+                response = await self.text_model.generate_content_async(content_parts)
                 ai_response_text = response.text
 
                 if len(ai_response_text) > 4000:
@@ -115,7 +182,6 @@ class AiCog(commands.Cog):
                 if image_to_display:
                     embed.set_image(url=image_to_display)
                 
-                # ====> CẬP NHẬT FOOTER THEO ĐÚNG YÊU CẦU <====
                 embed.set_footer(text="Cung cấp bởi Google Gemini 2.5 Pro", icon_url="https://i.imgur.com/v4vL5V2.png")
                 
                 await ctx.reply(embed=embed)
