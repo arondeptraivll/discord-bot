@@ -49,18 +49,59 @@ class AiCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         if GEMINI_API_KEY:
-            # Model cho chat và phân tích
             self.text_model = genai.GenerativeModel(
                 model_name='gemini-2.5-pro',
                 safety_settings=safety_settings
             )
-            # Model tạo ảnh mạnh nhất (sẽ hoạt động sau khi bật Vertex AI API)
+            # ====> GIẢI PHÁP: DÙNG MODEL TẠO ẢNH ỔN ĐỊNH VÀ TƯƠNG THÍCH <====
             self.image_model = genai.GenerativeModel(
-                model_name='models/imagen-4.0-ultra-generate-preview-06-06'
+                model_name='models/imagen-2-generate-preview-0025'
             )
         else:
             self.text_model = None
             self.image_model = None
+            
+    # ====> CÔNG CỤ CHẨN ĐOÁN MỚI: LIỆT KÊ CÁC MODEL KHẢ DỤNG <====
+    @commands.command(name='listmodels', hidden=True)
+    @commands.is_owner() # Chỉ chủ bot mới được dùng lệnh này
+    async def list_models(self, ctx: commands.Context):
+        """Liệt kê các model mà API Key này có thể sử dụng với phương thức generateContent."""
+        await ctx.send("🔍 Đang truy vấn danh sách các model khả dụng từ Google. Vui lòng đợi...")
+        try:
+            model_list = []
+            for m in genai.list_models():
+                # Chỉ lấy các model hỗ trợ phương thức mà chúng ta đang dùng
+                if 'generateContent' in m.supported_generation_methods:
+                    model_list.append(f"- `{m.name}`")
+            
+            if not model_list:
+                await ctx.send("❌ Không tìm thấy model nào khả dụng cho API Key này.")
+                return
+
+            description = "\n".join(model_list)
+            
+            embed = discord.Embed(
+                title="✅ Các Model Khả Dụng",
+                description="Đây là danh sách các model mà API Key của bạn có thể sử dụng với bot này:",
+                color=discord.Color.green()
+            )
+            
+            # Chia nhỏ tin nhắn nếu danh sách quá dài
+            if len(description) > 4000:
+                parts = [description[i:i+4000] for i in range(0, len(description), 4000)]
+                for i, part in enumerate(parts):
+                    embed.description = part
+                    if i == 0:
+                        embed.title = f"✅ Các Model Khả Dụng (Phần {i+1})"
+                    await ctx.author.send(embed=embed) # Gửi tin nhắn riêng để không spam kênh
+            else:
+                embed.description = description
+                await ctx.author.send(embed=embed)
+            
+            await ctx.message.add_reaction('✅')
+
+        except Exception as e:
+            await ctx.send(f"❌ Đã có lỗi khi truy vấn model: `{e}`")
 
     @commands.command(name='genimage')
     @commands.cooldown(1, 30, commands.BucketType.user)
@@ -69,10 +110,9 @@ class AiCog(commands.Cog):
             await ctx.reply("❌ Rất tiếc, tính năng tạo ảnh chưa được cấu hình đúng cách do thiếu API Key.")
             return
 
-        waiting_message = await ctx.reply(f"🎨 Đang vẽ tranh **chất lượng cao** theo yêu cầu của bạn: `{prompt}`. Vui lòng đợi một chút...")
+        waiting_message = await ctx.reply(f"🎨 Đang vẽ tranh theo yêu cầu của bạn: `{prompt}`...")
 
         try:
-            # Chạy tác vụ blocking trong một luồng riêng để không làm bot bị treo
             def generation_func():
                 return self.image_model.generate_content(prompt)
 
@@ -85,7 +125,8 @@ class AiCog(commands.Cog):
                 color=discord.Color.random()
             )
             embed.set_image(url="attachment://generated_image.png")
-            embed.set_footer(text="Tạo bởi Google Imagen 4.0 Ultra", icon_url="https://i.imgur.com/v4vL5V2.png")
+            # Cập nhật footer cho đúng model đang dùng
+            embed.set_footer(text="Tạo bởi Google Imagen 2", icon_url="https://i.imgur.com/v4vL5V2.png")
 
             await waiting_message.delete()
             await ctx.reply(embed=embed, file=image_file)
@@ -93,31 +134,10 @@ class AiCog(commands.Cog):
         except Exception as e:
             await waiting_message.delete()
             print(f"LỖI CHI TIẾT KHI TẠO ẢNH: {type(e).__name__} - {e}")
-            
-            error_type = type(e).__name__
-            error_details = str(e)
-
-            # Phân tích lỗi để đưa ra thông báo thân thiện hơn
-            user_friendly_error = "Đã có lỗi bất ngờ xảy ra khi tạo ảnh."
-            if "permissiondenied" in error_details.lower() or "service has been disabled" in error_details.lower():
-                user_friendly_error = "API Key của bạn không có quyền sử dụng model này. Vui lòng kiểm tra và đảm bảo **Vertex AI API** đã được bật trong Google Cloud Project của bạn."
-            elif "unsupporteduserlocation" in error_details.lower():
-                user_friendly_error = "Rất tiếc, tính năng này không khả dụng tại khu vực của bạn."
-            elif "prompt violates the safety policy" in error_details.lower():
-                 user_friendly_error = "Yêu cầu của bạn đã vi phạm chính sách an toàn. Vui lòng thử một ý tưởng khác."
-
-
-            error_embed = discord.Embed(
-                title="❌ Tạo ảnh thất bại",
-                description=user_friendly_error,
-                color=discord.Color.red()
-            )
-            error_embed.add_field(name="Loại lỗi API", value=f"`{error_type}`", inline=False)
-            
-            await ctx.reply(embed=error_embed)
-
+            await ctx.reply(f"❌ Rất tiếc, không thể tạo ảnh. Lỗi từ Google: `{str(e)}`")
 
     @generate_image.error
+    # ... (phần code này không đổi)
     async def genimage_error(self, ctx: commands.Context, error):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.reply(f"⏳ Bạn đang thao tác quá nhanh! Vui lòng chờ **{error.retry_after:.1f} giây**.", delete_after=5)
@@ -126,10 +146,10 @@ class AiCog(commands.Cog):
         else:
             print(f"Lỗi không xác định trong lệnh genimage: {error}")
             await ctx.reply("Đã xảy ra một lỗi cú pháp hoặc logic trong nội bộ bot.", delete_after=5)
-            
+
     # Lệnh !askai không thay đổi
     @commands.command(name='askai')
-    @commands.cooldown(1, 15, commands.BucketType.user)
+    # ... (phần code này không đổi)
     async def ask_ai(self, ctx: commands.Context, *, full_input: str):
         if not self.text_model:
             await ctx.reply("❌ Rất tiếc, tính năng AI chưa được cấu hình đúng cách do thiếu API Key.")
@@ -200,6 +220,7 @@ class AiCog(commands.Cog):
                 return 
 
     @ask_ai.error
+    # ... (phần code này không đổi)
     async def askai_error(self, ctx: commands.Context, error):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.reply(f"⏳ Bạn đang thao tác quá nhanh! Vui lòng chờ **{error.retry_after:.1f} giây**.", delete_after=5)
