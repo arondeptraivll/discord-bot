@@ -49,10 +49,12 @@ class AiCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         if GEMINI_API_KEY:
+            # Model cho chat và phân tích
             self.text_model = genai.GenerativeModel(
                 model_name='gemini-2.5-pro',
                 safety_settings=safety_settings
             )
+            # Model tạo ảnh mạnh nhất (sẽ hoạt động sau khi bật Vertex AI API)
             self.image_model = genai.GenerativeModel(
                 model_name='models/imagen-4.0-ultra-generate-preview-06-06'
             )
@@ -70,6 +72,7 @@ class AiCog(commands.Cog):
         waiting_message = await ctx.reply(f"🎨 Đang vẽ tranh **chất lượng cao** theo yêu cầu của bạn: `{prompt}`. Vui lòng đợi một chút...")
 
         try:
+            # Chạy tác vụ blocking trong một luồng riêng để không làm bot bị treo
             def generation_func():
                 return self.image_model.generate_content(prompt)
 
@@ -87,28 +90,29 @@ class AiCog(commands.Cog):
             await waiting_message.delete()
             await ctx.reply(embed=embed, file=image_file)
 
-        # ====> NÂNG CẤP KHỐI XỬ LÝ LỖI ĐỂ HIỂN THỊ CHI TIẾT <====
         except Exception as e:
             await waiting_message.delete()
-            # In lỗi đầy đủ ra console để bạn xem lại sau
             print(f"LỖI CHI TIẾT KHI TẠO ẢNH: {type(e).__name__} - {e}")
-
-            # Tạo một embed báo lỗi chi tiết hơn gửi cho người dùng
+            
             error_type = type(e).__name__
             error_details = str(e)
 
-            # Cắt bớt chi tiết lỗi nếu quá dài để hiển thị trên Discord
-            if len(error_details) > 1000:
-                error_details = error_details[:1000] + "..."
+            # Phân tích lỗi để đưa ra thông báo thân thiện hơn
+            user_friendly_error = "Đã có lỗi bất ngờ xảy ra khi tạo ảnh."
+            if "permissiondenied" in error_details.lower() or "service has been disabled" in error_details.lower():
+                user_friendly_error = "API Key của bạn không có quyền sử dụng model này. Vui lòng kiểm tra và đảm bảo **Vertex AI API** đã được bật trong Google Cloud Project của bạn."
+            elif "unsupporteduserlocation" in error_details.lower():
+                user_friendly_error = "Rất tiếc, tính năng này không khả dụng tại khu vực của bạn."
+            elif "prompt violates the safety policy" in error_details.lower():
+                 user_friendly_error = "Yêu cầu của bạn đã vi phạm chính sách an toàn. Vui lòng thử một ý tưởng khác."
+
 
             error_embed = discord.Embed(
                 title="❌ Tạo ảnh thất bại",
-                description="Đã có lỗi xảy ra khi cố gắng tạo hình ảnh của bạn.",
+                description=user_friendly_error,
                 color=discord.Color.red()
             )
             error_embed.add_field(name="Loại lỗi API", value=f"`{error_type}`", inline=False)
-            error_embed.add_field(name="Chi tiết lỗi từ Google", value=f"```{error_details}```", inline=False)
-            error_embed.set_footer(text="Gợi ý: Hãy kiểm tra quyền của API Key đối với model Imagen trong Google Cloud.")
             
             await ctx.reply(embed=error_embed)
 
@@ -120,14 +124,12 @@ class AiCog(commands.Cog):
         elif isinstance(error, commands.MissingRequiredArgument):
             await ctx.reply("⚠️ Bạn quên nhập nội dung để vẽ ảnh rồi! Cú pháp: `!genimage [nội dung bạn muốn vẽ]`", delete_after=7)
         else:
-            # Lỗi này chỉ xảy ra khi có vấn đề với code discord.py, không phải lỗi API
             print(f"Lỗi không xác định trong lệnh genimage: {error}")
             await ctx.reply("Đã xảy ra một lỗi cú pháp hoặc logic trong nội bộ bot.", delete_after=5)
             
     # Lệnh !askai không thay đổi
     @commands.command(name='askai')
-    # ... (code của !askai giữ nguyên, không cần dán lại)
-    # ...
+    @commands.cooldown(1, 15, commands.BucketType.user)
     async def ask_ai(self, ctx: commands.Context, *, full_input: str):
         if not self.text_model:
             await ctx.reply("❌ Rất tiếc, tính năng AI chưa được cấu hình đúng cách do thiếu API Key.")
