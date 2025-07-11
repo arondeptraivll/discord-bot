@@ -1,3 +1,4 @@
+# ai_cog.py
 import discord
 from discord.ext import commands
 import os
@@ -7,7 +8,7 @@ from google.api_core import exceptions as google_exceptions
 # Cấu hình API key từ biến môi trường
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
-# Tắt bộ lọc an toàn
+# Tắt bộ lọc an toàn (LƯU Ý: Việc này có thể tạo ra nội dung vi phạm ToS của Discord)
 safety_settings = [
     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -17,7 +18,11 @@ safety_settings = [
 
 # Chỉ cấu hình và tạo model nếu có API KEY
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+    except Exception as e:
+        print(f"❌ Lỗi khi cấu hình Google Gemini API: {e}")
+        GEMINI_API_KEY = None # Vô hiệu hóa tính năng nếu cấu hình lỗi
 else:
     print("⚠️ CẢNH BÁO: GEMINI_API_KEY không được tìm thấy. Lệnh !askai sẽ không hoạt động.")
 
@@ -45,6 +50,7 @@ class AiCog(commands.Cog):
                 response = await self.model.generate_content_async(prompt)
                 ai_response_text = response.text
 
+                # Cắt bớt nếu nội dung quá dài cho một embed description
                 if len(ai_response_text) > 4000:
                     ai_response_text = ai_response_text[:4000] + "\n... (Nội dung quá dài đã được cắt bớt)"
 
@@ -65,7 +71,10 @@ class AiCog(commands.Cog):
                     description="Không thể xử lý yêu cầu của bạn tại thời điểm này. Có thể do lỗi từ máy chủ của AI hoặc câu hỏi quá phức tạp. Vui lòng thử lại sau.",
                     color=discord.Color.red()
                 )
-                await ctx.reply(embed=embed)
+                
+                # ====> SỬA LỖI QUAN TRỌNG <====
+                # Gửi đi embed thông báo lỗi thay vì embed chứa kết quả thành công
+                await ctx.reply(embed=error_embed)
                 return 
 
     @ask_ai.error
@@ -76,13 +85,12 @@ class AiCog(commands.Cog):
             await ctx.reply("⚠️ Bạn quên nhập câu hỏi rồi! Cú pháp: `!askai [câu hỏi của bạn]`", delete_after=5)
         else:
             print(f"Lỗi không xác định được xử lý bởi askai_error: {error}")
+            await ctx.reply("Đã xảy ra một lỗi không xác định. Vui lòng thử lại.", delete_after=5)
 
-
-# ====> SỬA LỖI QUAN TRỌNG: THÊM LẠI HÀM SETUP BỊ THIẾU <====
 async def setup(bot: commands.Bot):
-    # Chỉ thêm Cog nếu API Key tồn tại
+    # Chỉ thêm Cog nếu API Key tồn tại và được cấu hình thành công
     if GEMINI_API_KEY:
         await bot.add_cog(AiCog(bot))
     else:
-        # Nếu không có key, Cog sẽ không được tải và thông báo đã được in ở trên
+        # Nếu không có key, Cog sẽ không được tải và thông báo đã được in ra console
         pass
