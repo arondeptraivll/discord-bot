@@ -32,7 +32,7 @@ class AiCog(commands.Cog):
         self.bot = bot
         if GEMINI_API_KEY:
             self.model = genai.GenerativeModel(
-                model_name='gemini-1.5-flash-latest', 
+                model_name='gemini-2.5-pro', 
                 safety_settings=safety_settings
             )
         else:
