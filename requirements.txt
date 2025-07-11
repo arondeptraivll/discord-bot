@@ -1,5 +1,5 @@
-# requirements.txt
 discord.py
 python-dotenv
 Flask
 validators
+google-generativeai
