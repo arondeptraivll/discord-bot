@@ -4,7 +4,6 @@ from discord.ui import View, Button
 
 class HelpView(View):
     def __init__(self, author: discord.User, **kwargs):
-        # Nút sẽ bị vô hiệu hóa sau 300 giây (5 phút)
         super().__init__(timeout=300, **kwargs)
         self.author = author
 
@@ -25,7 +24,6 @@ class HelpCog(commands.Cog):
 
     @commands.command(name='help')
     async def help_command(self, ctx: commands.Context):
-        # Xóa tin nhắn gốc "!help" của người dùng
         await ctx.message.delete()
         
         help_text = (
@@ -52,12 +50,16 @@ class HelpCog(commands.Cog):
             "```\n"
             "➡️ **Chức năng:** Gỡ trạng thái AFK của bạn một cách thủ công.\n"
             "_ _\n"
-            
+            "```\n"
+            "!askai [câu hỏi]\n"
+            "```\n"
+            "➡️ **Chức năng:** Trò chuyện với AI thông minh. Bạn có thể hỏi bất cứ điều gì và nhận câu trả lời tức thì.\n"
+
+            "_ _\n"
             "*Làm sao để lấy ID tin nhắn? Vào `Cài đặt > Nâng cao > Bật Chế độ nhà phát triển`. Sau đó chuột phải vào tin nhắn bất kỳ và chọn `Copy Message ID`.*"
         )
         
         view = HelpView(author=ctx.author)
-        # Tin nhắn help sẽ công khai và tồn tại vĩnh viễn.
         await ctx.send(help_text, view=view)
 
 async def setup(bot):
