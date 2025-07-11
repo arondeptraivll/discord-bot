@@ -49,12 +49,11 @@ class AiCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         if GEMINI_API_KEY:
-            # Model cho chat và phân tích (dùng phiên bản mạnh nhất trong danh sách)
             self.text_model = genai.GenerativeModel(
                 model_name='gemini-2.5-pro',
                 safety_settings=safety_settings
             )
-            # ====> SỬ DỤNG MODEL TẠO ẢNH CHÍNH XÁC TỪ DANH SÁCH BẠN CUNG CẤP <====
+            # ====> SỬ DỤNG MODEL CHÍNH XÁC 100% TỪ DANH SÁCH BẠN CUNG CẤP <====
             self.image_model = genai.GenerativeModel(
                 model_name='models/gemini-2.0-flash-preview-image-generation'
             )
