@@ -3,5 +3,4 @@ python-dotenv
 Flask
 validators
 google-generativeai
-aiohttp           # <-- Thư viện này cũng cần cho thư viện mới
-google-cloud-aiplatform  # <-- THÊM THƯ VIỆN QUAN TRỌNG NÀY
+aiohttp
