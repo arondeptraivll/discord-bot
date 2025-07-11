@@ -49,57 +49,35 @@ class AiCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         if GEMINI_API_KEY:
+            # Model cho chat và phân tích (dùng phiên bản mạnh nhất trong danh sách)
             self.text_model = genai.GenerativeModel(
                 model_name='gemini-2.5-pro',
                 safety_settings=safety_settings
             )
-            # ====> GIẢI PHÁP: DÙNG MODEL TẠO ẢNH ỔN ĐỊNH VÀ TƯƠNG THÍCH <====
+            # ====> SỬ DỤNG MODEL TẠO ẢNH CHÍNH XÁC TỪ DANH SÁCH BẠN CUNG CẤP <====
             self.image_model = genai.GenerativeModel(
-                model_name='models/imagen-2-generate-preview-0025'
+                model_name='models/gemini-2.0-flash-preview-image-generation'
             )
         else:
             self.text_model = None
             self.image_model = None
             
-    # ====> CÔNG CỤ CHẨN ĐOÁN MỚI: LIỆT KÊ CÁC MODEL KHẢ DỤNG <====
+    # Lệnh !listmodels vẫn hữu ích để chẩn đoán trong tương lai
     @commands.command(name='listmodels', hidden=True)
-    @commands.is_owner() # Chỉ chủ bot mới được dùng lệnh này
+    @commands.is_owner()
     async def list_models(self, ctx: commands.Context):
-        """Liệt kê các model mà API Key này có thể sử dụng với phương thức generateContent."""
-        await ctx.send("🔍 Đang truy vấn danh sách các model khả dụng từ Google. Vui lòng đợi...")
+        await ctx.send("🔍 Đang truy vấn danh sách các model khả dụng từ Google...")
         try:
-            model_list = []
-            for m in genai.list_models():
-                # Chỉ lấy các model hỗ trợ phương thức mà chúng ta đang dùng
-                if 'generateContent' in m.supported_generation_methods:
-                    model_list.append(f"- `{m.name}`")
+            model_list = [f"- `{m.name}`" for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
             
             if not model_list:
                 await ctx.send("❌ Không tìm thấy model nào khả dụng cho API Key này.")
                 return
 
             description = "\n".join(model_list)
-            
-            embed = discord.Embed(
-                title="✅ Các Model Khả Dụng",
-                description="Đây là danh sách các model mà API Key của bạn có thể sử dụng với bot này:",
-                color=discord.Color.green()
-            )
-            
-            # Chia nhỏ tin nhắn nếu danh sách quá dài
-            if len(description) > 4000:
-                parts = [description[i:i+4000] for i in range(0, len(description), 4000)]
-                for i, part in enumerate(parts):
-                    embed.description = part
-                    if i == 0:
-                        embed.title = f"✅ Các Model Khả Dụng (Phần {i+1})"
-                    await ctx.author.send(embed=embed) # Gửi tin nhắn riêng để không spam kênh
-            else:
-                embed.description = description
-                await ctx.author.send(embed=embed)
-            
+            embed = discord.Embed(title="✅ Các Model Khả Dụng", description=description, color=discord.Color.green())
+            await ctx.author.send(embed=embed)
             await ctx.message.add_reaction('✅')
-
         except Exception as e:
             await ctx.send(f"❌ Đã có lỗi khi truy vấn model: `{e}`")
 
@@ -120,24 +98,19 @@ class AiCog(commands.Cog):
             image_bytes = response.images[0]._image_bytes
             image_file = discord.File(fp=io.BytesIO(image_bytes), filename="generated_image.png")
             
-            embed = discord.Embed(
-                title=f"🖼️ Ảnh của {ctx.author.display_name} đây",
-                color=discord.Color.random()
-            )
+            embed = discord.Embed(title=f"🖼️ Ảnh của {ctx.author.display_name} đây", color=discord.Color.random())
             embed.set_image(url="attachment://generated_image.png")
             # Cập nhật footer cho đúng model đang dùng
-            embed.set_footer(text="Tạo bởi Google Imagen 2", icon_url="https://i.imgur.com/v4vL5V2.png")
+            embed.set_footer(text="Tạo bởi Google Gemini 2.0 Flash", icon_url="https://i.imgur.com/v4vL5V2.png")
 
             await waiting_message.delete()
             await ctx.reply(embed=embed, file=image_file)
-
         except Exception as e:
             await waiting_message.delete()
             print(f"LỖI CHI TIẾT KHI TẠO ẢNH: {type(e).__name__} - {e}")
             await ctx.reply(f"❌ Rất tiếc, không thể tạo ảnh. Lỗi từ Google: `{str(e)}`")
 
     @generate_image.error
-    # ... (phần code này không đổi)
     async def genimage_error(self, ctx: commands.Context, error):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.reply(f"⏳ Bạn đang thao tác quá nhanh! Vui lòng chờ **{error.retry_after:.1f} giây**.", delete_after=5)
@@ -149,7 +122,7 @@ class AiCog(commands.Cog):
 
     # Lệnh !askai không thay đổi
     @commands.command(name='askai')
-    # ... (phần code này không đổi)
+    @commands.cooldown(1, 15, commands.BucketType.user)
     async def ask_ai(self, ctx: commands.Context, *, full_input: str):
         if not self.text_model:
             await ctx.reply("❌ Rất tiếc, tính năng AI chưa được cấu hình đúng cách do thiếu API Key.")
@@ -220,7 +193,6 @@ class AiCog(commands.Cog):
                 return 
 
     @ask_ai.error
-    # ... (phần code này không đổi)
     async def askai_error(self, ctx: commands.Context, error):
         if isinstance(error, commands.CommandOnCooldown):
             await ctx.reply(f"⏳ Bạn đang thao tác quá nhanh! Vui lòng chờ **{error.retry_after:.1f} giây**.", delete_after=5)
