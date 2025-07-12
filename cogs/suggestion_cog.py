@@ -3,7 +3,7 @@ import discord
 from discord.ext import commands
 
 # --- CẤU HÌNH NGHIÊM TÚC ---
-SUGGESTION_CHANNEL_ID = 1393423014670106778
+SUGGESTION_CHANNEL_ID = 1393422835136987246
 # -----------------------------
 
 class SuggestionCog(commands.Cog):
