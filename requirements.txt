@@ -4,3 +4,4 @@ Flask
 validators
 google-generativeai
 aiohttp
+Pillow
