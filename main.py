@@ -4,7 +4,7 @@ from discord.ext import commands
 import os
 import asyncio
 from dotenv import load_dotenv
-from keep_alive import keep_alive
+from keep_alive import keep_alive, set_bot_instance
 
 # Load biến môi trường từ file .env
 load_dotenv()
@@ -49,6 +49,9 @@ async def main():
                 print(f'✅ Loaded Cog: {filename}')
             except Exception as e:
                 print(f'❌ Failed to load cog {filename}: {type(e).__name__} - {e}')
+    
+    # Set bot instance cho web server
+    set_bot_instance(bot)
     
     # Giữ bot sống trên Render bằng Flask server đơn giản
     keep_alive()
