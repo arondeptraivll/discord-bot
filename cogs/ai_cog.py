@@ -7,6 +7,7 @@ from google.api_core import exceptions as google_exceptions
 import validators
 import aiohttp
 import io
+from PIL import Image
 
 # Cấu hình API key từ biến môi trường
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
@@ -30,7 +31,7 @@ else:
     print("⚠️ CẢNH BÁO: GEMINI_API_KEY không được tìm thấy. Lệnh !askai sẽ không hoạt động.")
 
 async def fetch_image_from_url(url: str):
-    """Tải dữ liệu ảnh từ URL và trả về (bytes, mime_type)."""
+    """Tải dữ liệu ảnh từ URL và trả về PIL Image object."""
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
@@ -38,7 +39,9 @@ async def fetch_image_from_url(url: str):
                     image_bytes = await response.read()
                     mime_type = response.headers.get('Content-Type')
                     if mime_type and mime_type.startswith('image/'):
-                        return image_bytes, mime_type
+                        # Chuyển bytes thành PIL Image
+                        image = Image.open(io.BytesIO(image_bytes))
+                        return image, None
                     else:
                         return None, "Invalid content type"
                 else:
@@ -50,7 +53,7 @@ class AiCog(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         if GEMINI_API_KEY:
-            # Chỉ khởi tạo model mạnh nhất cho việc phân tích text và hình ảnh
+            # Giữ nguyên model mạnh nhất cho việc phân tích text và hình ảnh
             self.model = genai.GenerativeModel(
                 model_name='gemini-2.5-pro',
                 safety_settings=safety_settings
@@ -87,20 +90,24 @@ class AiCog(commands.Cog):
             content_parts = []
             image_to_display = None
 
-            if image_url:
-                image_bytes, mime_type_or_error = await fetch_image_from_url(image_url)
-                if image_bytes:
-                    image_to_display = image_url
-                    image_part = {"mime_type": mime_type_or_error, "data": image_bytes}
-                    content_parts.append(image_part)
-                else:
-                    await ctx.reply(f"❌ Không thể xử lý hình ảnh từ URL. Lý do: `{mime_type_or_error}`")
-                    return
-            
+            # Thêm prompt vào content_parts trước
             content_parts.append(prompt)
 
+            if image_url:
+                image, error = await fetch_image_from_url(image_url)
+                if image:
+                    image_to_display = image_url
+                    # Thêm PIL Image object vào content_parts
+                    content_parts.append(image)
+                else:
+                    await ctx.reply(f"❌ Không thể xử lý hình ảnh từ URL. Lý do: `{error}`")
+                    return
+
             try:
-                response = await self.model.generate_content_async(content_parts)
+                # Gọi generate_content với list các phần
+                response = self.model.generate_content(content_parts)
+                
+                # Lấy text từ response
                 ai_response_text = response.text
 
                 if len(ai_response_text) > 4000:
