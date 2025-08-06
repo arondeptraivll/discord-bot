@@ -42,8 +42,8 @@ async def on_ready():
 async def main():
     print("Loading cogs...")
     for filename in os.listdir('./cogs'):
-        # Bỏ qua các file không phải là cog captcha
-        if filename.endswith('.py') and filename != 'captcha_cog.py':
+        # Load tất cả file .py trong folder cogs
+        if filename.endswith('.py'):
             try:
                 await bot.load_extension(f'cogs.{filename[:-3]}')
                 print(f'✅ Loaded Cog: {filename}')
