@@ -1,9 +1,10 @@
 # keep_alive.py
-from flask import Flask, render_template, request, jsonify, redirect
+from flask import Flask, render_template, request, jsonify
 import os
 import requests
 from datetime import datetime, timedelta
 import asyncio
+import threading
 
 app = Flask(__name__)
 
@@ -30,17 +31,17 @@ def verify_page():
         guild_id = int(guild_id)
         
         # Lấy thông tin guild và user
+        guild_icon = "https://cdn.discordapp.com/embed/avatars/0.png"
+        guild_name = "Discord Server"
+        
         if bot_instance:
-            guild = bot_instance.get_guild(guild_id)
-            if guild:
-                guild_icon = guild.icon.url if guild.icon else "https://cdn.discordapp.com/embed/avatars/0.png"
-                guild_name = guild.name
-            else:
-                guild_icon = "https://cdn.discordapp.com/embed/avatars/0.png"
-                guild_name = "Discord Server"
-        else:
-            guild_icon = "https://cdn.discordapp.com/embed/avatars/0.png"
-            guild_name = "Discord Server"
+            try:
+                guild = bot_instance.get_guild(guild_id)
+                if guild:
+                    guild_icon = guild.icon.url if guild.icon else "https://cdn.discordapp.com/embed/avatars/0.png"
+                    guild_name = guild.name
+            except:
+                pass
         
         site_key = os.getenv('RECAPTCHA_SITE_KEY')
         if not site_key:
@@ -51,7 +52,8 @@ def verify_page():
                              token=token,
                              guild_icon=guild_icon,
                              guild_name=guild_name)
-    except:
+    except Exception as e:
+        print(f"Error in verify_page: {e}")
         return "Invalid verification link", 400
 
 @app.route('/verify_captcha', methods=['POST'])
@@ -89,8 +91,16 @@ def verify_captcha():
                 if bot_instance:
                     verification_cog = bot_instance.get_cog('VerificationCog')
                     if verification_cog:
-                        # Chạy trong background task
-                        asyncio.create_task(verification_cog.complete_verification(user_id, guild_id))
+                        # Tạo task để chạy async function
+                        def run_verification():
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            loop.run_until_complete(verification_cog.complete_verification(user_id, guild_id))
+                            loop.close()
+                        
+                        thread = threading.Thread(target=run_verification)
+                        thread.daemon = True
+                        thread.start()
                         
                 return jsonify({'success': True, 'message': 'Verification completed successfully!'})
             except Exception as e:
