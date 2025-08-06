@@ -115,7 +115,7 @@ class AiCog(commands.Cog):
                 if image_to_display:
                     embed.set_image(url=image_to_display)
                 
-                embed.set_footer(text="Cung cấp bởi Google Gemini 2.5 Pro", icon_url="https://i.imgur.com/v4vL5V2.png")
+                embed.set_footer(text="Cung cấp bởi HaiGPT", icon_url="https://i.pinimg.com/736x/72/40/32/7240322b1bad16b56925b872c795e9a0.jpg")
                 
                 await ctx.reply(embed=embed)
                 
