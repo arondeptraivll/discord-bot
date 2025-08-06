@@ -1,11 +1,11 @@
 import discord
 from discord.ext import commands
+import asyncio
 
 class BypassView(discord.ui.View):
     def __init__(self):
-        super().__init__(timeout=None)  # View không có timeout
+        super().__init__(timeout=None)
         
-        # Tạo button với URL
         button = discord.ui.Button(
             label="Lấy Token 🔑",
             style=discord.ButtonStyle.green,
@@ -18,6 +18,7 @@ class AutoMessage(commands.Cog):
         self.bot = bot
         self.excluded_role_id = 1391751822867435631
         self.target_channel_id = 1392067603530256445
+        self.recent_messages = set()  # Lưu trữ message ID đã xử lý
 
     @commands.Cog.listener()
     async def on_message(self, message):
@@ -25,6 +26,10 @@ class AutoMessage(commands.Cog):
         if message.author.bot:
             return
         
+        # Kiểm tra duplicate processing
+        if message.id in self.recent_messages:
+            return
+            
         # Bỏ qua tin nhắn không có nội dung
         if not message.content:
             return
@@ -32,6 +37,12 @@ class AutoMessage(commands.Cog):
         # Kiểm tra xem tin nhắn có chứa "funlink" không (không phân biệt hoa thường)
         if "funlink" not in message.content.lower():
             return
+            
+        # Thêm message ID vào set để tránh duplicate
+        self.recent_messages.add(message.id)
+        
+        # Xóa message ID sau 10 giây để tránh memory leak
+        asyncio.create_task(self.cleanup_message_id(message.id))
             
         # Kiểm tra xem người gửi có phải admin không
         if message.author.guild_permissions.administrator:
@@ -59,10 +70,16 @@ class AutoMessage(commands.Cog):
                 embed=embed,
                 view=view
             )
+            print(f"Sent funlink response to {message.author.name} in {message.channel.name}")
         except discord.errors.Forbidden:
             print(f"Bot không có quyền gửi tin nhắn trong kênh {message.channel.name}")
         except Exception as e:
             print(f"Lỗi khi gửi tin nhắn tự động: {e}")
+    
+    async def cleanup_message_id(self, message_id):
+        """Xóa message ID sau 10 giây để tránh memory leak"""
+        await asyncio.sleep(10)
+        self.recent_messages.discard(message_id)
 
 # Hàm setup để load cog
 async def setup(bot):
