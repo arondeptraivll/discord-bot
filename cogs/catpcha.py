@@ -179,15 +179,15 @@ class WebCaptchaView(discord.ui.View):
     def __init__(self, verification_url):
         super().__init__(timeout=300)
         self.verification_url = verification_url
-
-    @discord.ui.button(label='Xác Thực', style=discord.ButtonStyle.link, url=None, emoji='🔗')
-    async def verify_web_button(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Button này sẽ được setup với URL trong __init__
-        pass
-
-    def __post_init__(self):
-        # Set URL for the button
-        self.verify_web_button.url = self.verification_url
+        
+        # Tạo button link thủ công
+        link_button = discord.ui.Button(
+            label='Xác Thực',
+            style=discord.ButtonStyle.link,
+            url=verification_url,
+            emoji='🔗'
+        )
+        self.add_item(link_button)
 
 async def setup(bot):
     await bot.add_cog(VerificationCog(bot))
