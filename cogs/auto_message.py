@@ -1,6 +1,18 @@
 import discord
 from discord.ext import commands
 
+class BypassView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)  # View không có timeout
+        
+        # Tạo button với URL
+        button = discord.ui.Button(
+            label="Lấy Token 🔑",
+            style=discord.ButtonStyle.green,
+            url="https://tuanhaideptraivcl.vercel.app/Bypass%20Funlink/index.html"
+        )
+        self.add_item(button)
+
 class AutoMessage(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -37,11 +49,15 @@ class AutoMessage(commands.Cog):
             color=discord.Color.red()
         )
         
-        # Gửi embed với mention người dùng
+        # Tạo view với button
+        view = BypassView()
+        
+        # Gửi embed với mention người dùng và button
         try:
             await message.channel.send(
                 content=f"{message.author.mention}",
-                embed=embed
+                embed=embed,
+                view=view
             )
         except discord.errors.Forbidden:
             print(f"Bot không có quyền gửi tin nhắn trong kênh {message.channel.name}")
