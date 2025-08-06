@@ -2,8 +2,17 @@
 import discord
 from discord.ext import commands
 import asyncio
-import os
+import random
+import io
 from datetime import datetime, timedelta
+
+# Import PIL với fallback
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    print("⚠️ PIL not available, using text-based captcha")
 
 class VerificationCog(commands.Cog):
     def __init__(self, bot):
@@ -11,7 +20,6 @@ class VerificationCog(commands.Cog):
         self.channel_id = 1402467575299834056  # ID kênh chat
         self.role_id = 1402466671544766494     # ID role
         self.verification_message_id = None    # Lưu ID tin nhắn verify
-        self.pending_verifications = {}        # Lưu các verification đang chờ
         
     # Event khi user mới vào server
     @commands.Cog.listener()
@@ -81,37 +89,11 @@ class VerificationCog(commands.Cog):
         except Exception as e:
             print(f"❌ Error in check_and_send_verification: {e}")
 
-    async def complete_verification(self, user_id, guild_id):
-        """Hoàn thành verification từ web"""
-        try:
-            guild = self.bot.get_guild(guild_id)
-            if not guild:
-                return False
-                
-            member = guild.get_member(user_id)
-            if not member:
-                return False
-                
-            role = guild.get_role(self.role_id)
-            if not role:
-                return False
-                
-            await member.remove_roles(role)
-            print(f"✅ {member.name} completed web verification")
-            
-            # Kiểm tra lại xem có cần xóa tin nhắn verify không
-            await self.check_and_send_verification(guild)
-            
-            return True
-        except Exception as e:
-            print(f"❌ Error completing verification: {e}")
-            return False
-
     # Event khi user rời server
     @commands.Cog.listener()
     async def on_member_remove(self, member):
         # Kiểm tra lại xem có cần xóa tin nhắn verify không
-        await asyncio.sleep(1)
+        await asyncio.sleep(1)  # Chờ 1 giây để đảm bảo member đã được remove
         await self.check_and_send_verification(member.guild)
 
 class VerifyView(discord.ui.View):
@@ -148,46 +130,126 @@ class VerifyView(discord.ui.View):
                 await self.cog.check_and_send_verification(interaction.guild)
                 
             else:
-                # Tài khoản < 7 ngày, cần captcha web
-                embed = discord.Embed(
-                    title="🤖 Vui lòng giải captcha ở dưới",
-                    description="Xác thực bạn không phải robot",
-                    color=0xff9900
-                )
-                
-                # Tạo verification token
-                verification_token = f"{interaction.user.id}_{interaction.guild.id}"
-                self.cog.pending_verifications[verification_token] = {
-                    'user_id': interaction.user.id,
-                    'guild_id': interaction.guild.id,
-                    'timestamp': datetime.utcnow()
-                }
-                
-                # URL tới trang verification
-                base_url = os.getenv('WEB_URL', 'https://your-render-app.onrender.com')
-                verification_url = f"{base_url}/verify?token={verification_token}"
-                
-                view = WebCaptchaView(verification_url)
-                await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
-                print(f"📝 {interaction.user.name} redirected to web captcha")
+                # Tài khoản < 7 ngày, cần captcha
+                try:
+                    captcha_view = CaptchaView(self.bot, self.role_id, self.cog)
+                    question, answer = captcha_view.generate_text_captcha()
+                    
+                    embed = discord.Embed(
+                        title="🤖 Vui Lòng Giải Captcha Dưới",
+                        description=f"Hãy tính: **{question}**",
+                        color=0xff9900
+                    )
+                    
+                    await interaction.response.send_message(embed=embed, view=captcha_view, ephemeral=True)
+                    print(f"📝 {interaction.user.name} needs captcha (account age: {account_age.days} days)")
+                    
+                except Exception as captcha_error:
+                    print(f"❌ Error generating captcha: {captcha_error}")
+                    await interaction.response.send_message("❌ Có lỗi xảy ra khi tạo captcha, vui lòng thử lại!", ephemeral=True)
                 
         except Exception as e:
             print(f"❌ Error in verify button: {e}")
-            await interaction.response.send_message("❌ Có lỗi xảy ra, vui lòng thử lại!", ephemeral=True)
+            try:
+                await interaction.response.send_message("❌ Có lỗi xảy ra, vui lòng thử lại!", ephemeral=True)
+            except:
+                pass
 
-class WebCaptchaView(discord.ui.View):
-    def __init__(self, verification_url):
-        super().__init__(timeout=300)
-        self.verification_url = verification_url
+class CaptchaView(discord.ui.View):
+    def __init__(self, bot, role_id, cog):
+        super().__init__(timeout=300)  # 5 phút timeout
+        self.bot = bot
+        self.role_id = role_id
+        self.cog = cog
+        self.answer = None
+
+    def generate_text_captcha(self):
+        """Tạo captcha dạng text"""
+        num1 = random.randint(5, 25)
+        num2 = random.randint(5, 20)
+        operation = random.choice(['+', '-'])
         
-        # Tạo button link thủ công
-        link_button = discord.ui.Button(
-            label='Xác Thực',
-            style=discord.ButtonStyle.link,
-            url=verification_url,
-            emoji='🔗'
-        )
-        self.add_item(link_button)
+        if operation == '+':
+            self.answer = num1 + num2
+            question = f"{num1} + {num2}"
+        else:
+            if num1 < num2:
+                num1, num2 = num2, num1
+            self.answer = num1 - num2
+            question = f"{num1} - {num2}"
+        
+        return question, self.answer
+
+    @discord.ui.button(label='Giải Captcha', style=discord.ButtonStyle.primary, emoji='🔍')
+    async def solve_captcha(self, interaction: discord.Interaction, button: discord.ui.Button):
+        modal = CaptchaModal(self.bot, self.role_id, self.answer, self.cog)
+        await interaction.response.send_modal(modal)
+
+class CaptchaModal(discord.ui.Modal):
+    def __init__(self, bot, role_id, correct_answer, cog):
+        super().__init__(title="Giải Captcha")
+        self.bot = bot
+        self.role_id = role_id
+        self.correct_answer = correct_answer
+        self.cog = cog
+
+    answer = discord.ui.TextInput(
+        label='Kết quả phép tính:',
+        placeholder='Nhập kết quả...',
+        required=True,
+        max_length=10
+    )
+
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            user_answer = int(self.answer.value.strip())
+            
+            if user_answer == self.correct_answer:
+                # Đúng - gỡ role
+                role = interaction.guild.get_role(self.role_id)
+                if role and role in interaction.user.roles:
+                    await interaction.user.remove_roles(role)
+                    
+                embed = discord.Embed(
+                    title="✅ Captcha Thành Công!",
+                    description="Bạn đã giải captcha thành công và được xác thực!",
+                    color=0x00ff00
+                )
+                await interaction.response.send_message(embed=embed, ephemeral=True)
+                print(f"✅ {interaction.user.name} solved captcha correctly")
+                
+                # Kiểm tra lại xem có cần xóa tin nhắn verify không
+                await self.cog.check_and_send_verification(interaction.guild)
+                
+            else:
+                # Sai - thử lại
+                embed = discord.Embed(
+                    title="❌ Captcha Sai!",
+                    description="Kết quả không chính xác. Vui lòng thử lại!",
+                    color=0xff0000
+                )
+                
+                # Tạo captcha mới
+                captcha_view = CaptchaView(self.bot, self.role_id, self.cog)
+                question, answer = captcha_view.generate_text_captcha()
+                embed.description += f"\n\nHãy tính: **{question}**"
+                await interaction.response.send_message(embed=embed, view=captcha_view, ephemeral=True)
+                
+                print(f"❌ {interaction.user.name} failed captcha")
+                
+        except ValueError:
+            embed = discord.Embed(
+                title="❌ Lỗi!",
+                description="Vui lòng chỉ nhập số!",
+                color=0xff0000
+            )
+            await interaction.response.send_message(embed=embed, ephemeral=True)
+        except Exception as e:
+            print(f"❌ Error in captcha submit: {e}")
+            try:
+                await interaction.response.send_message("❌ Có lỗi xảy ra!", ephemeral=True)
+            except:
+                pass
 
 async def setup(bot):
     await bot.add_cog(VerificationCog(bot))
