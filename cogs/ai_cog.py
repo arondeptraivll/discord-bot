@@ -102,7 +102,7 @@ class AiCog(commands.Cog):
         if GEMINI_API_KEY:
             try:
                 self.model = genai.GenerativeModel(
-                    model_name='gemini-2.0-flash-exp',
+                    model_name='gemini-2.5-flash',  # Thay đổi sang model 2.5 flash
                     safety_settings=safety_settings,
                     system_instruction=HAIGPT_SYSTEM_PROMPT
                 )
